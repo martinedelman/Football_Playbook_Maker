@@ -10,6 +10,7 @@ import type {
   Player,
   OffensivePlay,
 } from "./types";
+import { slugify } from "./utils";
 
 function clonePlayers(players: Player[]): Player[] {
   return players.map((player) => ({
@@ -41,6 +42,18 @@ function createDefensePlayers(formationId: string, coverageId: keyof typeof defe
   });
 }
 
+function getOffensiveFormationLabel(id: string) {
+  return offensiveFormations.find((formation) => formation.id === id)?.label ?? id;
+}
+
+function getDefensiveFormationLabel(id: string) {
+  return defensiveFormations.find((formation) => formation.id === id)?.label ?? id;
+}
+
+function getCoverageLabel(id: string) {
+  return defensiveCoverages[id]?.label ?? id;
+}
+
 export function PlaybookBuilder() {
   const [mode, setMode] = useState<PlayMode>("offense");
   const defaultOffenseFormation = offensiveFormations[0];
@@ -64,6 +77,7 @@ export function PlaybookBuilder() {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [drawingPlayerId, setDrawingPlayerId] = useState<string | null>(null);
   const [playbook, setPlaybook] = useState<PlaybookItem[]>([]);
+  const [playbookTitle, setPlaybookTitle] = useState("Playbook personalizado");
 
   const offenseFormation = useMemo(
     () => offensiveFormations.find((formation) => formation.id === offenseFormationId) ?? defaultOffenseFormation,
@@ -246,13 +260,29 @@ export function PlaybookBuilder() {
     }
   };
 
+  const handleRemovePlay = (index: number) => {
+    setPlaybook((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  const handleClearPlaybook = () => {
+    setPlaybook([]);
+  };
+
   const handleDownload = () => {
-    const json = JSON.stringify(playbook, null, 2);
+    if (playbook.length === 0) return;
+    const title = playbookTitle.trim() || "Playbook personalizado";
+    const payload = {
+      title,
+      generatedAt: new Date().toISOString(),
+      items: playbook,
+    };
+    const json = JSON.stringify(payload, null, 2);
     const blob = new Blob([json], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = "playbook.json";
+    const fileName = slugify(title) || "playbook-personalizado";
+    anchor.download = `${fileName}.json`;
     anchor.click();
     URL.revokeObjectURL(url);
   };
@@ -501,32 +531,83 @@ export function PlaybookBuilder() {
               </p>
             ) : (
               <ul className="mt-4 space-y-3">
-                {playbook.map((item, index) => (
-                  <li key={index} className="rounded-2xl border border-slate-700 bg-slate-800/70 px-4 py-3 text-sm text-slate-200">
-                    <span className="mr-2 inline-flex rounded-full bg-slate-700 px-2 py-1 text-xs font-semibold uppercase">
-                      {item.type === "offense" ? "Ofensiva" : "Defensiva"}
-                    </span>
-                    {item.type === "offense" ? item.play.name : item.play.name}
-                  </li>
-                ))}
+                {playbook.map((item, index) => {
+                  const isOffense = item.type === "offense";
+                  const metadata = isOffense
+                    ? `${getOffensiveFormationLabel(item.play.formationId)} · ${
+                        item.play.format === "flag5" ? "Flag 5 vs 5" : "Tackle 11 vs 11"
+                      } · ${item.play.players.length} jugadores`
+                    : `${getDefensiveFormationLabel(item.play.formationId)} · ${getCoverageLabel(
+                        item.play.coverageId,
+                      )} · ${item.play.players.length} jugadores`;
+
+                  return (
+                    <li
+                      key={index}
+                      className="rounded-2xl border border-slate-700 bg-slate-800/70 px-4 py-3 text-sm text-slate-200"
+                    >
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="inline-flex rounded-full bg-slate-700 px-2 py-1 text-xs font-semibold uppercase">
+                              {isOffense ? "Ofensiva" : "Defensiva"}
+                            </span>
+                            <span className="font-semibold text-slate-100">{item.play.name}</span>
+                          </div>
+                          <p className="mt-1 text-xs text-slate-400">{metadata}</p>
+                        </div>
+                        <button
+                          type="button"
+                          className="self-start rounded-full border border-red-400 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-400 hover:text-slate-900"
+                          onClick={() => handleRemovePlay(index)}
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             )}
-            <div className="mt-6 flex flex-col gap-3">
-              <button
-                type="button"
-                className="rounded-xl bg-yellow-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-yellow-300"
-                onClick={handleAddPlayToPlaybook}
-              >
-                Guardar jugada actual
-              </button>
-              <button
-                type="button"
-                className="rounded-xl border border-yellow-400 px-4 py-2 text-sm font-semibold text-yellow-300 hover:bg-yellow-400 hover:text-slate-900 disabled:cursor-not-allowed disabled:border-slate-700 disabled:text-slate-500"
-                onClick={handleDownload}
-                disabled={playbook.length === 0}
-              >
-                Descargar JSON
-              </button>
+            <div className="mt-5 space-y-3">
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-slate-300" htmlFor="playbook-title">
+                  Nombre del playbook (se usará para el archivo JSON)
+                </label>
+                <input
+                  id="playbook-title"
+                  type="text"
+                  className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-yellow-400 focus:outline-none"
+                  value={playbookTitle}
+                  onChange={(event) => setPlaybookTitle(event.target.value)}
+                  placeholder="Ej. Playbook ofensivo 2025"
+                />
+              </div>
+              <div className="flex flex-col gap-3">
+                <button
+                  type="button"
+                  className="rounded-xl bg-yellow-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-yellow-300"
+                  onClick={handleAddPlayToPlaybook}
+                >
+                  Guardar jugada actual
+                </button>
+                <button
+                  type="button"
+                  className="rounded-xl border border-slate-600 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:border-slate-700 disabled:text-slate-500"
+                  onClick={handleClearPlaybook}
+                  disabled={playbook.length === 0}
+                >
+                  Limpiar playbook
+                </button>
+                <button
+                  type="button"
+                  className="rounded-xl border border-yellow-400 px-4 py-2 text-sm font-semibold text-yellow-300 hover:bg-yellow-400 hover:text-slate-900 disabled:cursor-not-allowed disabled:border-slate-700 disabled:text-slate-500"
+                  onClick={handleDownload}
+                  disabled={playbook.length === 0}
+                >
+                  Descargar JSON
+                </button>
+              </div>
             </div>
           </div>
         </div>

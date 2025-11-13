@@ -7,6 +7,7 @@ import {
   PlayField,
 } from "./PlayField";
 import type { Coordinate, Player } from "./types";
+import { slugify } from "./utils";
 
 function clampPosition({ x, y }: Coordinate): Coordinate {
   return {
@@ -32,15 +33,6 @@ function createInitialPlayers(count: number): Player[] {
       },
     } satisfies Player;
   });
-}
-
-function slugify(value: string) {
-  return value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)+/g, "");
 }
 
 const TEMPLATE_OPTIONS = [
