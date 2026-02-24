@@ -9,6 +9,7 @@ import { playerTemplateService } from "@/services/playerTemplateService";
 import PlaybookList from "@/app/components/PlaybookList";
 import PlayEditor from "@/app/components/PlayEditor";
 import PlayerTemplateEditor from "@/app/components/PlayerTemplateEditor";
+import { buildPlaybookPrintHtml } from "@/app/components/PlaybookPrintPage";
 
 type AutoPlayPattern = {
   formationName: string;
@@ -191,6 +192,19 @@ export default function Home() {
     }
   };
 
+  const handlePrintPlaybook = (playbook: Playbook) => {
+    const html = buildPlaybookPrintHtml(playbook);
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const printWindow = window.open(url, "_blank");
+    if (!printWindow) {
+      URL.revokeObjectURL(url);
+      alert("Please allow pop-ups to print the playbook.");
+      return;
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  };
+
   const handleCreatePlay = async (name: string, side: PlaySide) => {
     if (!selectedPlaybook) return;
 
@@ -336,6 +350,7 @@ export default function Home() {
           onCreatePlaybook={handleCreatePlaybook}
           onSelectPlaybook={handleSelectPlaybook}
           onDeletePlaybook={handleDeletePlaybook}
+          onPrintPlaybook={handlePrintPlaybook}
           onCreatePlay={handleCreatePlay}
           onSelectPlay={handleSelectPlay}
           onDeletePlay={handleDeletePlay}

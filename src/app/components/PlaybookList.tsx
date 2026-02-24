@@ -12,6 +12,7 @@ interface PlaybookListProps {
   onCreatePlaybook: (name: string) => void;
   onSelectPlaybook: (playbook: Playbook) => void;
   onDeletePlaybook: (id: string) => void;
+  onPrintPlaybook: (playbook: Playbook) => void;
   onCreatePlay: (name: string, side: PlaySide) => void;
   onSelectPlay: (play: Play) => void;
   onDeletePlay: (id: string) => void;
@@ -29,6 +30,7 @@ export default function PlaybookList({
   onCreatePlaybook,
   onSelectPlaybook,
   onDeletePlaybook,
+  onPrintPlaybook,
   onCreatePlay,
   onSelectPlay,
   onDeletePlay,
@@ -123,17 +125,32 @@ export default function PlaybookList({
                 }`}
               >
                 <span className="text-sm font-medium">{pb.name}</span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (confirm("Delete this playbook?")) {
-                      onDeletePlaybook(pb.id);
-                    }
-                  }}
-                  className="text-red-500 hover:text-red-700 text-xs"
-                >
-                  ×
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onPrintPlaybook(pb);
+                    }}
+                    className="text-gray-600 hover:text-gray-800 text-sm"
+                    title="Print playbook"
+                    aria-label={`Print playbook ${pb.name}`}
+                  >
+                    🖨️
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (confirm("Delete this playbook?")) {
+                        onDeletePlaybook(pb.id);
+                      }
+                    }}
+                    className="text-red-500 hover:text-red-700 text-xs"
+                    title="Delete playbook"
+                    aria-label={`Delete playbook ${pb.name}`}
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
 
               {/* Plays for selected playbook */}
