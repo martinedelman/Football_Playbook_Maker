@@ -1,29 +1,37 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Playbook, Play, PlaySide } from "@/entities";
+import { Playbook, Play, PlaySide, PlayerTemplate } from "@/entities";
 import { playbookService } from "@/services/playbookService";
 import { playService } from "@/services/playService";
+import { playerTemplateService } from "@/services/playerTemplateService";
 import PlaybookList from "@/app/components/PlaybookList";
 import PlayEditor from "@/app/components/PlayEditor";
+import PlayerTemplateEditor from "@/app/components/PlayerTemplateEditor";
 
 export default function Home() {
   const [playbooks, setPlaybooks] = useState<Playbook[]>([]);
   const [selectedPlaybook, setSelectedPlaybook] = useState<Playbook | null>(null);
   const [selectedPlay, setSelectedPlay] = useState<Play | null>(null);
+  const [playerTemplates, setPlayerTemplates] = useState<PlayerTemplate[]>([]);
+  const [selectedPlayerTemplate, setSelectedPlayerTemplate] = useState<PlayerTemplate | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadPlaybooks();
+    loadData();
   }, []);
 
-  const loadPlaybooks = async () => {
+  const loadData = async () => {
     try {
       setLoading(true);
-      const data = await playbookService.getAllPlaybooks();
-      setPlaybooks(data);
+      const [playbooksData, templatesData] = await Promise.all([
+        playbookService.getAllPlaybooks(),
+        playerTemplateService.getAllPlayerTemplates(),
+      ]);
+      setPlaybooks(playbooksData);
+      setPlayerTemplates(templatesData);
     } catch (error) {
-      console.error("Failed to load playbooks:", error);
+      console.error("Failed to load data:", error);
     } finally {
       setLoading(false);
     }
@@ -121,6 +129,41 @@ export default function Home() {
     }
   };
 
+  const handleCreatePlayerTemplate = async (name: string) => {
+    try {
+      const newTemplate = await playerTemplateService.createPlayerTemplate({ name });
+      setPlayerTemplates([...playerTemplates, newTemplate]);
+      setSelectedPlayerTemplate(newTemplate);
+      setSelectedPlay(null);
+    } catch (error) {
+      console.error("Failed to create player template:", error);
+      alert("Error creating player template");
+    }
+  };
+
+  const handleSelectPlayerTemplate = (template: PlayerTemplate) => {
+    setSelectedPlayerTemplate(template);
+    setSelectedPlay(null);
+  };
+
+  const handleDeletePlayerTemplate = async (id: string) => {
+    try {
+      await playerTemplateService.deletePlayerTemplate(id);
+      setPlayerTemplates(playerTemplates.filter((t) => t.id !== id));
+      if (selectedPlayerTemplate?.id === id) {
+        setSelectedPlayerTemplate(null);
+      }
+    } catch (error) {
+      console.error("Failed to delete player template:", error);
+      alert("Error deleting player template");
+    }
+  };
+
+  const handleUpdatePlayerTemplate = async (updatedTemplate: PlayerTemplate) => {
+    setSelectedPlayerTemplate(updatedTemplate);
+    setPlayerTemplates(playerTemplates.map((t) => (t.id === updatedTemplate.id ? updatedTemplate : t)));
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -141,12 +184,17 @@ export default function Home() {
           playbooks={playbooks}
           selectedPlaybook={selectedPlaybook}
           selectedPlay={selectedPlay}
+          playerTemplates={playerTemplates}
+          selectedPlayerTemplate={selectedPlayerTemplate}
           onCreatePlaybook={handleCreatePlaybook}
           onSelectPlaybook={handleSelectPlaybook}
           onDeletePlaybook={handleDeletePlaybook}
           onCreatePlay={handleCreatePlay}
           onSelectPlay={handleSelectPlay}
           onDeletePlay={handleDeletePlay}
+          onCreatePlayerTemplate={handleCreatePlayerTemplate}
+          onSelectPlayerTemplate={handleSelectPlayerTemplate}
+          onDeletePlayerTemplate={handleDeletePlayerTemplate}
         />
       </aside>
 
@@ -154,6 +202,8 @@ export default function Home() {
       <main className="flex-1 overflow-hidden">
         {selectedPlay ? (
           <PlayEditor play={selectedPlay} onUpdate={handleUpdatePlay} />
+        ) : selectedPlayerTemplate ? (
+          <PlayerTemplateEditor template={selectedPlayerTemplate} onUpdate={handleUpdatePlayerTemplate} />
         ) : (
           <div className="h-full flex items-center justify-center text-gray-400">
             <div className="text-center">
@@ -165,8 +215,8 @@ export default function Home() {
                   d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                 />
               </svg>
-              <h3 className="mt-2 text-sm font-medium">No play selected</h3>
-              <p className="mt-1 text-sm">Select a play from the sidebar or create a new one</p>
+              <h3 className="mt-2 text-sm font-medium">No play or template selected</h3>
+              <p className="mt-1 text-sm">Select a play or player template from the sidebar or create a new one</p>
             </div>
           </div>
         )}

@@ -66,6 +66,26 @@ export interface Playbook {
   updatedAt: string;
 }
 
+// Player Template - Single player with multiple named routes
+export interface NamedRoute {
+  id: string;
+  name: string;
+  points: Point[];
+  type?: RouteType;
+}
+
+export interface PlayerTemplate {
+  id: string;
+  name: string;
+  playerLabel: string;
+  playerColor?: string;
+  initialX?: number;
+  initialY?: number;
+  routes: NamedRoute[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 // DTOs para creación
 export interface CreatePlaybookDTO {
   name: string;
@@ -90,4 +110,21 @@ export interface UpdatePlayDTO {
   routes?: PlayerRoute[];
   annotations?: AnnotationStroke[];
   formationId?: string;
+}
+
+export interface CreatePlayerTemplateDTO {
+  name: string;
+  playerLabel?: string;
+  playerColor?: string;
+  initialX?: number;
+  initialY?: number;
+}
+
+export interface UpdatePlayerTemplateDTO {
+  name?: string;
+  playerLabel?: string;
+  playerColor?: string;
+  initialX?: number;
+  initialY?: number;
+  routes?: NamedRoute[];
 }

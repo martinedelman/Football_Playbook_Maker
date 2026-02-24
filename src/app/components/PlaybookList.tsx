@@ -1,35 +1,47 @@
 "use client";
 
 import { useState } from "react";
-import { Playbook, Play, PlaySide } from "@/entities";
+import { Playbook, Play, PlaySide, PlayerTemplate } from "@/entities";
 
 interface PlaybookListProps {
   playbooks: Playbook[];
   selectedPlaybook: Playbook | null;
   selectedPlay: Play | null;
+  playerTemplates: PlayerTemplate[];
+  selectedPlayerTemplate: PlayerTemplate | null;
   onCreatePlaybook: (name: string) => void;
   onSelectPlaybook: (playbook: Playbook) => void;
   onDeletePlaybook: (id: string) => void;
   onCreatePlay: (name: string, side: PlaySide) => void;
   onSelectPlay: (play: Play) => void;
   onDeletePlay: (id: string) => void;
+  onCreatePlayerTemplate: (name: string) => void;
+  onSelectPlayerTemplate: (template: PlayerTemplate) => void;
+  onDeletePlayerTemplate: (id: string) => void;
 }
 
 export default function PlaybookList({
   playbooks,
   selectedPlaybook,
   selectedPlay,
+  playerTemplates,
+  selectedPlayerTemplate,
   onCreatePlaybook,
   onSelectPlaybook,
   onDeletePlaybook,
   onCreatePlay,
   onSelectPlay,
   onDeletePlay,
+  onCreatePlayerTemplate,
+  onSelectPlayerTemplate,
+  onDeletePlayerTemplate,
 }: PlaybookListProps) {
   const [isCreatingPlaybook, setIsCreatingPlaybook] = useState(false);
   const [isCreatingPlay, setIsCreatingPlay] = useState(false);
+  const [isCreatingPlayerTemplate, setIsCreatingPlayerTemplate] = useState(false);
   const [newPlaybookName, setNewPlaybookName] = useState("");
   const [newPlayName, setNewPlayName] = useState("");
+  const [newPlayerTemplateName, setNewPlayerTemplateName] = useState("");
   const [newPlaySide, setNewPlaySide] = useState<PlaySide>(PlaySide.OFFENSE);
 
   const handleCreatePlaybook = () => {
@@ -45,6 +57,14 @@ export default function PlaybookList({
       onCreatePlay(newPlayName.trim(), newPlaySide);
       setNewPlayName("");
       setIsCreatingPlay(false);
+    }
+  };
+
+  const handleCreatePlayerTemplate = () => {
+    if (newPlayerTemplateName.trim()) {
+      onCreatePlayerTemplate(newPlayerTemplateName.trim());
+      setNewPlayerTemplateName("");
+      setIsCreatingPlayerTemplate(false);
     }
   };
 
@@ -152,6 +172,78 @@ export default function PlaybookList({
                   ))}
                 </div>
               )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Player Templates section */}
+      <div className="p-4 border-t border-gray-200">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-gray-700 uppercase">Player Templates</h2>
+          <button
+            onClick={() => setIsCreatingPlayerTemplate(true)}
+            className="px-2 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700"
+          >
+            + New Player
+          </button>
+        </div>
+
+        {isCreatingPlayerTemplate && (
+          <div className="mb-3 p-2 bg-gray-50 rounded">
+            <input
+              type="text"
+              value={newPlayerTemplateName}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPlayerTemplateName(e.target.value)}
+              onKeyDown={(e: React.KeyboardEvent) => e.key === "Enter" && handleCreatePlayerTemplate()}
+              placeholder="Player template name"
+              className="w-full px-2 py-1 text-sm border rounded mb-2"
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={handleCreatePlayerTemplate}
+                className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => {
+                  setIsCreatingPlayerTemplate(false);
+                  setNewPlayerTemplateName("");
+                }}
+                className="px-3 py-1 text-xs bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-1">
+          {playerTemplates.map((template) => (
+            <div
+              key={template.id}
+              onClick={() => onSelectPlayerTemplate(template)}
+              className={`flex items-center justify-between p-2 rounded cursor-pointer ${
+                selectedPlayerTemplate?.id === template.id ? "bg-purple-100 text-purple-900" : "hover:bg-gray-100"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">{template.name}</span>
+                <span className="text-xs text-gray-500">({template.routes.length} routes)</span>
+              </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (confirm("Delete this player template?")) {
+                    onDeletePlayerTemplate(template.id);
+                  }
+                }}
+                className="text-red-500 hover:text-red-700 text-xs"
+              >
+                ×
+              </button>
             </div>
           ))}
         </div>

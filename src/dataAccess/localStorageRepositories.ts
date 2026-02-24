@@ -2,19 +2,23 @@ import {
   Playbook,
   Play,
   Formation,
+  PlayerTemplate,
   CreatePlaybookDTO,
   CreatePlayDTO,
   CreateFormationDTO,
+  CreatePlayerTemplateDTO,
   UpdatePlayDTO,
+  UpdatePlayerTemplateDTO,
   PlaySide,
 } from "@/entities";
-import { PlaybookRepository, PlayRepository, FormationRepository } from "./repositories";
+import { PlaybookRepository, PlayRepository, FormationRepository, PlayerTemplateRepository } from "./repositories";
 import { generateUUID } from "@/utils/uuid";
 
 // Claves de localStorage con versionado
 const STORAGE_KEYS = {
   PLAYBOOKS: "ffpb:v1:playbooks",
   FORMATIONS: "ffpb:v1:formations",
+  PLAYER_TEMPLATES: "ffpb:v1:playerTemplates",
 } as const;
 
 // Helpers de localStorage
@@ -198,5 +202,62 @@ export class LocalStorageFormationRepository implements FormationRepository {
     const formations = await this.getAll();
     const filtered = formations.filter((f) => f.id !== id);
     setToStorage(STORAGE_KEYS.FORMATIONS, filtered);
+  }
+}
+
+// Implementación de PlayerTemplateRepository con localStorage
+export class LocalStoragePlayerTemplateRepository implements PlayerTemplateRepository {
+  async getAll(): Promise<PlayerTemplate[]> {
+    return getFromStorage<PlayerTemplate[]>(STORAGE_KEYS.PLAYER_TEMPLATES) || [];
+  }
+
+  async getById(id: string): Promise<PlayerTemplate | null> {
+    const templates = await this.getAll();
+    return templates.find((t) => t.id === id) || null;
+  }
+
+  async create(dto: CreatePlayerTemplateDTO): Promise<PlayerTemplate> {
+    const templates = await this.getAll();
+    const now = new Date().toISOString();
+
+    // Use first 2 letters of name (uppercase) as default label if not provided
+    const defaultLabel = dto.name.trim().substring(0, 2).toUpperCase() || "P";
+
+    const newTemplate: PlayerTemplate = {
+      id: generateUUID(),
+      name: dto.name,
+      playerLabel: dto.playerLabel || defaultLabel,
+      playerColor: dto.playerColor,
+      initialX: dto.initialX !== undefined ? dto.initialX : 250, // Centro del campo por defecto
+      initialY: dto.initialY !== undefined ? dto.initialY : 150,
+      routes: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+    templates.push(newTemplate);
+    setToStorage(STORAGE_KEYS.PLAYER_TEMPLATES, templates);
+    return newTemplate;
+  }
+
+  async update(id: string, dto: UpdatePlayerTemplateDTO): Promise<PlayerTemplate> {
+    const templates = await this.getAll();
+    const index = templates.findIndex((t) => t.id === id);
+    if (index === -1) throw new Error("Player template not found");
+
+    const updated = {
+      ...templates[index],
+      ...dto,
+      id: templates[index].id,
+      updatedAt: new Date().toISOString(),
+    };
+    templates[index] = updated;
+    setToStorage(STORAGE_KEYS.PLAYER_TEMPLATES, templates);
+    return updated;
+  }
+
+  async delete(id: string): Promise<void> {
+    const templates = await this.getAll();
+    const filtered = templates.filter((t) => t.id !== id);
+    setToStorage(STORAGE_KEYS.PLAYER_TEMPLATES, filtered);
   }
 }

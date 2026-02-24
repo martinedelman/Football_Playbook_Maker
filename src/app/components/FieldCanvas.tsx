@@ -408,7 +408,7 @@ export default function FieldCanvas({
         )}
 
         {/* Routes */}
-        {routes.map((route) => {
+        {routes.map((route, routeIdx) => {
           const player = players.find((p) => p.playerId === route.playerId);
           if (!player || route.points.length === 0) return null;
 
@@ -425,7 +425,7 @@ export default function FieldCanvas({
           const routeColor = player.color || COLORS.ROUTE_LINE;
 
           return (
-            <g key={`route-${route.playerId}`}>
+            <g key={`route-${route.playerId}-${routeIdx}`}>
               <path
                 d={pointsToPath(allPoints)}
                 stroke={routeColor}
@@ -446,7 +446,7 @@ export default function FieldCanvas({
               {/* Route points (exclude last point so arrow is clean) */}
               {route.points.slice(0, -1).map((point, idx) => (
                 <circle
-                  key={`route-point-${route.playerId}-${idx}`}
+                  key={`route-point-${route.playerId}-${routeIdx}-${idx}`}
                   cx={point.x}
                   cy={point.y}
                   r={3}

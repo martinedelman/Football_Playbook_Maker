@@ -2,10 +2,13 @@ import {
   Playbook,
   Play,
   Formation,
+  PlayerTemplate,
   CreatePlaybookDTO,
   CreatePlayDTO,
   CreateFormationDTO,
+  CreatePlayerTemplateDTO,
   UpdatePlayDTO,
+  UpdatePlayerTemplateDTO,
 } from "@/entities";
 
 // Interfaces de repositorios (contratos)
@@ -29,5 +32,13 @@ export interface FormationRepository {
   getAll(): Promise<Formation[]>;
   getById(id: string): Promise<Formation | null>;
   create(dto: CreateFormationDTO): Promise<Formation>;
+  delete(id: string): Promise<void>;
+}
+
+export interface PlayerTemplateRepository {
+  getAll(): Promise<PlayerTemplate[]>;
+  getById(id: string): Promise<PlayerTemplate | null>;
+  create(dto: CreatePlayerTemplateDTO): Promise<PlayerTemplate>;
+  update(id: string, dto: UpdatePlayerTemplateDTO): Promise<PlayerTemplate>;
   delete(id: string): Promise<void>;
 }
