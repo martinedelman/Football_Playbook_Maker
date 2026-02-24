@@ -1,13 +1,137 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Playbook, Play, PlaySide, PlayerTemplate } from "@/entities";
+import { Playbook, Play, PlaySide, PlayerTemplate, PlayerRoute, PlayerState } from "@/entities";
 import { playbookService } from "@/services/playbookService";
 import { playService } from "@/services/playService";
+import { formationService } from "@/services/formationService";
 import { playerTemplateService } from "@/services/playerTemplateService";
 import PlaybookList from "@/app/components/PlaybookList";
 import PlayEditor from "@/app/components/PlayEditor";
 import PlayerTemplateEditor from "@/app/components/PlayerTemplateEditor";
+
+type AutoPlayPattern = {
+  formationName: string;
+  routes: {
+    X: number;
+    C: number;
+    Z: number;
+    last: number;
+  };
+  lastLabel: string;
+};
+
+const AUTO_PLAY_PATTERN =
+  /^(?<formation>.+?)\s+(?<x>\d+)\s*-\s*(?<c>\d+)\s*-\s*(?<z>\d+)\s*-\s*(?<label>[A-Za-z]+)(?<route>\d+)\s*$/i;
+
+const parseAutoPlayName = (name: string): AutoPlayPattern | null => {
+  const match = name.trim().match(AUTO_PLAY_PATTERN);
+  if (!match || !match.groups) return null;
+
+  const formationName = match.groups.formation.trim();
+  const x = Number(match.groups.x);
+  const c = Number(match.groups.c);
+  const z = Number(match.groups.z);
+  const lastRoute = Number(match.groups.route);
+  const lastLabel = match.groups.label.trim().toUpperCase();
+
+  if (
+    !formationName ||
+    !lastLabel ||
+    Number.isNaN(x) ||
+    Number.isNaN(c) ||
+    Number.isNaN(z) ||
+    Number.isNaN(lastRoute)
+  ) {
+    return null;
+  }
+
+  return {
+    formationName,
+    routes: { X: x, C: c, Z: z, last: lastRoute },
+    lastLabel,
+  };
+};
+
+const findPlayerByLabel = (players: PlayerState[], labels: string[]): PlayerState | undefined => {
+  const lookup = labels.map((label) => label.toUpperCase());
+  return players.find((player) => lookup.includes(player.label.toUpperCase()));
+};
+
+const extractRouteNumber = (name: string): number | null => {
+  const match = name.trim().match(/\d+/);
+  if (!match) return null;
+  const value = Number(match[0]);
+  return Number.isNaN(value) ? null : value;
+};
+
+const getTemplateRoutePoints = (
+  template: PlayerTemplate,
+  targetRouteNumber: number,
+  player: PlayerState,
+): PlayerRoute | null => {
+  const namedRoute = template.routes.find((route) => extractRouteNumber(route.name) === targetRouteNumber);
+  if (!namedRoute) return null;
+
+  const templateX = template.initialX !== undefined ? template.initialX : 250;
+  const templateY = template.initialY !== undefined ? template.initialY : 150;
+  const offsetX = player.x - templateX;
+  const offsetY = player.y - templateY;
+
+  const adjustedPoints = namedRoute.points.map((point) => ({
+    x: point.x + offsetX,
+    y: point.y + offsetY,
+  }));
+
+  return {
+    playerId: player.playerId,
+    points: adjustedPoints,
+  };
+};
+
+const buildRoutesFromPattern = (
+  players: PlayerState[],
+  templates: PlayerTemplate[],
+  pattern: AutoPlayPattern,
+): PlayerRoute[] => {
+  const routes: PlayerRoute[] = [];
+
+  const playerX = findPlayerByLabel(players, ["X"]);
+  const playerC = findPlayerByLabel(players, ["C", "Y"]);
+  const playerZ = findPlayerByLabel(players, ["Z"]);
+  const playerLast = findPlayerByLabel(players, [pattern.lastLabel]);
+
+  const templateX = templates.find((template) => template.playerLabel.toUpperCase() === "X");
+  const templateC =
+    templates.find((template) => template.playerLabel.toUpperCase() === "C") ||
+    templates.find((template) => template.playerLabel.toUpperCase() === "Y");
+  const templateZ = templates.find((template) => template.playerLabel.toUpperCase() === "Z");
+  const templateLast = templates.find(
+    (template) => template.playerLabel.toUpperCase() === pattern.lastLabel.toUpperCase(),
+  );
+
+  if (playerX && templateX) {
+    const route = getTemplateRoutePoints(templateX, pattern.routes.X, playerX);
+    if (route) routes.push(route);
+  }
+
+  if (playerC && templateC) {
+    const route = getTemplateRoutePoints(templateC, pattern.routes.C, playerC);
+    if (route) routes.push(route);
+  }
+
+  if (playerZ && templateZ) {
+    const route = getTemplateRoutePoints(templateZ, pattern.routes.Z, playerZ);
+    if (route) routes.push(route);
+  }
+
+  if (playerLast && templateLast) {
+    const route = getTemplateRoutePoints(templateLast, pattern.routes.last, playerLast);
+    if (route) routes.push(route);
+  }
+
+  return routes;
+};
 
 export default function Home() {
   const [playbooks, setPlaybooks] = useState<Playbook[]>([]);
@@ -71,18 +195,41 @@ export default function Home() {
     if (!selectedPlaybook) return;
 
     try {
+      const autoPattern = parseAutoPlayName(name);
       const newPlay = await playService.createPlay({
         name,
         side,
         playbookId: selectedPlaybook.id,
       });
 
+      let playToSelect = newPlay;
+
+      if (autoPattern) {
+        const [formations, templates] = await Promise.all([
+          formationService.getAllFormations(),
+          playerTemplateService.getAllPlayerTemplates(),
+        ]);
+
+        const formation = formations.find(
+          (item) => item.side === side && item.name.toLowerCase() === autoPattern.formationName.toLowerCase(),
+        );
+
+        if (formation) {
+          playToSelect = await playService.applyFormationToPlay(playToSelect.id, formation.id);
+        }
+
+        const routes = buildRoutesFromPattern(playToSelect.players, templates, autoPattern);
+        if (routes.length > 0) {
+          playToSelect = await playService.updatePlayRoutes(playToSelect.id, routes);
+        }
+      }
+
       // Reload playbook to get updated plays
       const updated = await playbookService.getPlaybookById(selectedPlaybook.id);
       if (updated) {
         setSelectedPlaybook(updated);
         setPlaybooks(playbooks.map((pb: Playbook) => (pb.id === updated.id ? updated : pb)));
-        setSelectedPlay(newPlay);
+        setSelectedPlay(playToSelect);
       }
     } catch (error) {
       console.error("Failed to create play:", error);
