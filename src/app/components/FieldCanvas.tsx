@@ -412,14 +412,23 @@ export default function FieldCanvas({
           const player = players.find((p) => p.playerId === route.playerId);
           if (!player || route.points.length === 0) return null;
 
-          // Draw route from player position through all points
-          const allPoints = [{ x: player.x, y: player.y }, ...route.points];
+          // Calculate starting point on player circle perimeter
+          const firstRoutePoint = route.points[0];
+          const angle = Math.atan2(firstRoutePoint.y - player.y, firstRoutePoint.x - player.x);
+          const startPoint = {
+            x: player.x + PLAYER_RADIUS * Math.cos(angle),
+            y: player.y + PLAYER_RADIUS * Math.sin(angle),
+          };
+
+          // Draw route from player perimeter through all points
+          const allPoints = [startPoint, ...route.points];
+          const routeColor = player.color || COLORS.ROUTE_LINE;
 
           return (
             <g key={`route-${route.playerId}`}>
               <path
                 d={pointsToPath(allPoints)}
-                stroke={COLORS.ROUTE_LINE}
+                stroke={routeColor}
                 strokeWidth={2}
                 fill="none"
                 strokeDasharray={route.type === "dashed" ? "10,5" : undefined}
@@ -427,7 +436,7 @@ export default function FieldCanvas({
               {allPoints.length >= 2 && (
                 <path
                   d={createArrowPath(allPoints[allPoints.length - 2], allPoints[allPoints.length - 1])}
-                  stroke={COLORS.ARROW}
+                  stroke={routeColor}
                   strokeWidth={2}
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -441,7 +450,7 @@ export default function FieldCanvas({
                   cx={point.x}
                   cy={point.y}
                   r={3}
-                  fill={COLORS.ROUTE_POINT}
+                  fill={routeColor}
                 />
               ))}
             </g>
@@ -454,14 +463,24 @@ export default function FieldCanvas({
             {(() => {
               const player = players.find((p) => p.playerId === selectedPlayerId);
               if (!player) return null;
-              const allPoints = [{ x: player.x, y: player.y }, ...currentRoute];
+
+              // Calculate starting point on player circle perimeter
+              const firstRoutePoint = currentRoute[0];
+              const angle = Math.atan2(firstRoutePoint.y - player.y, firstRoutePoint.x - player.x);
+              const startPoint = {
+                x: player.x + PLAYER_RADIUS * Math.cos(angle),
+                y: player.y + PLAYER_RADIUS * Math.sin(angle),
+              };
+
+              const allPoints = [startPoint, ...currentRoute];
+              const routeColor = player.color || COLORS.ROUTE_LINE;
               return (
                 <>
-                  <path d={pointsToPath(allPoints)} stroke={COLORS.ROUTE_LINE} strokeWidth={2} fill="none" />
+                  <path d={pointsToPath(allPoints)} stroke={routeColor} strokeWidth={2} fill="none" />
                   {allPoints.length >= 2 && (
                     <path
                       d={createArrowPath(allPoints[allPoints.length - 2], allPoints[allPoints.length - 1])}
-                      stroke={COLORS.ARROW}
+                      stroke={routeColor}
                       strokeWidth={2}
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -469,7 +488,7 @@ export default function FieldCanvas({
                     />
                   )}
                   {currentRoute.slice(0, -1).map((point, idx) => (
-                    <circle key={`current-point-${idx}`} cx={point.x} cy={point.y} r={3} fill={COLORS.ROUTE_POINT} />
+                    <circle key={`current-point-${idx}`} cx={point.x} cy={point.y} r={3} fill={routeColor} />
                   ))}
                 </>
               );
@@ -478,51 +497,57 @@ export default function FieldCanvas({
         )}
 
         {/* Players */}
-        {players.map((player) => (
-          <g key={player.playerId}>
-            <circle
-              cx={player.x}
-              cy={player.y}
-              r={PLAYER_RADIUS}
-              fill={selectedPlayerId === player.playerId ? COLORS.PLAYER_BG_SELECTED : COLORS.PLAYER_BG_IDLE}
-              stroke={selectedPlayerId === player.playerId ? COLORS.PLAYER_STROKE_SELECTED : COLORS.PLAYER_STROKE_IDLE}
-              strokeWidth={1.5}
-              style={{ cursor: toolMode === "select" ? "move" : "pointer" }}
-              onPointerDown={(e) => handlePlayerPointerDown(e, player.playerId)}
-              onPointerMove={handlePlayerPointerMove}
-              onPointerUp={handlePlayerPointerUp}
-              onClick={(e) => handlePlayerClickForRoute(e, player.playerId)}
-              onDoubleClick={() => handleLabelDoubleClick(player.playerId, player.label)}
-            />
-            {editingPlayerId === player.playerId ? (
-              <foreignObject x={player.x - 20} y={player.y - 12} width={40} height={24}>
-                <input
-                  type="text"
-                  value={editingLabel}
-                  onChange={handleLabelChange}
-                  onBlur={handleLabelBlur}
-                  onKeyDown={handleLabelKeyDown}
-                  autoFocus
-                  className="w-full h-full text-center text-sm font-semibold border border-blue-500 rounded"
-                  style={{ outline: "none" }}
-                />
-              </foreignObject>
-            ) : (
-              <text
-                x={player.x}
-                y={player.y}
-                textAnchor="middle"
-                dominantBaseline="central"
-                fontSize="14"
-                fontWeight="semibold"
-                fill={selectedPlayerId === player.playerId ? COLORS.PLAYER_TEXT_SELECTED : COLORS.PLAYER_TEXT_IDLE}
-                style={{ pointerEvents: "none", userSelect: "none" }}
-              >
-                {player.label}
-              </text>
-            )}
-          </g>
-        ))}
+        {players.map((player) => {
+          const playerColor = player.color;
+          const isSelected = selectedPlayerId === player.playerId;
+
+          return (
+            <g key={player.playerId}>
+              <circle
+                cx={player.x}
+                cy={player.y}
+                r={PLAYER_RADIUS}
+                fill={isSelected ? COLORS.PLAYER_BG_SELECTED : playerColor || COLORS.PLAYER_BG_IDLE}
+                fillOpacity={isSelected ? 1 : playerColor ? 0.7 : 1}
+                stroke="#000000"
+                strokeWidth={2.5}
+                style={{ cursor: toolMode === "select" ? "move" : "pointer" }}
+                onPointerDown={(e) => handlePlayerPointerDown(e, player.playerId)}
+                onPointerMove={handlePlayerPointerMove}
+                onPointerUp={handlePlayerPointerUp}
+                onClick={(e) => handlePlayerClickForRoute(e, player.playerId)}
+                onDoubleClick={() => handleLabelDoubleClick(player.playerId, player.label)}
+              />
+              {editingPlayerId === player.playerId ? (
+                <foreignObject x={player.x - 20} y={player.y - 12} width={40} height={24}>
+                  <input
+                    type="text"
+                    value={editingLabel}
+                    onChange={handleLabelChange}
+                    onBlur={handleLabelBlur}
+                    onKeyDown={handleLabelKeyDown}
+                    autoFocus
+                    className="w-full h-full text-center text-sm font-semibold border border-blue-500 rounded"
+                    style={{ outline: "none" }}
+                  />
+                </foreignObject>
+              ) : (
+                <text
+                  x={player.x}
+                  y={player.y}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fontSize="14"
+                  fontWeight="semibold"
+                  fill={isSelected ? COLORS.PLAYER_TEXT_SELECTED : playerColor ? "#000000" : COLORS.PLAYER_TEXT_IDLE}
+                  style={{ pointerEvents: "none", userSelect: "none" }}
+                >
+                  {player.label}
+                </text>
+              )}
+            </g>
+          );
+        })}
       </svg>
     </div>
   );

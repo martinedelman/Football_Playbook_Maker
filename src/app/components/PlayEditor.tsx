@@ -78,6 +78,15 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
     }
   };
 
+  const handlePlayerColorChange = async (color: string) => {
+    if (!selectedPlayerId) return;
+
+    const updatedPlayers = play.players.map((p) => (p.playerId === selectedPlayerId ? { ...p, color } : p));
+    await handlePlayersChange(updatedPlayers);
+  };
+
+  const selectedPlayer = play.players.find((p) => p.playerId === selectedPlayerId);
+
   return (
     <div className="h-full flex flex-col bg-gray-50">
       {/* Header */}
@@ -96,6 +105,9 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
         toolMode={toolMode}
         onToolModeChange={setToolMode}
         playSide={play.side}
+        selectedPlayerId={selectedPlayerId}
+        selectedPlayerColor={selectedPlayer?.color}
+        onPlayerColorChange={handlePlayerColorChange}
         onSaveFormation={handleSaveFormation}
         onLoadFormation={handleLoadFormation}
         onClearAnnotations={handleClearAnnotations}

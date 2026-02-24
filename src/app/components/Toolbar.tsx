@@ -9,6 +9,9 @@ interface ToolbarProps {
   toolMode: ToolMode;
   onToolModeChange: (mode: ToolMode) => void;
   playSide: PlaySide;
+  selectedPlayerId: string | null;
+  selectedPlayerColor: string | undefined;
+  onPlayerColorChange: (color: string) => void;
   onSaveFormation: (name: string) => void;
   onLoadFormation: (formationId: string) => void;
   onClearAnnotations: () => void;
@@ -18,6 +21,9 @@ export default function Toolbar({
   toolMode,
   onToolModeChange,
   playSide,
+  selectedPlayerId,
+  selectedPlayerColor,
+  onPlayerColorChange,
   onSaveFormation,
   onLoadFormation,
   onClearAnnotations,
@@ -130,6 +136,22 @@ export default function Toolbar({
             </select>
           )}
         </div>
+
+        <div className="h-8 w-px bg-gray-300"></div>
+
+        {/* Player color picker */}
+        {selectedPlayerId && toolMode === "select" && (
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-gray-700">Player Color:</label>
+            <input
+              type="color"
+              value={selectedPlayerColor || "#000000"}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => onPlayerColorChange(e.target.value)}
+              className="w-10 h-10 border rounded cursor-pointer"
+              title="Choose player color"
+            />
+          </div>
+        )}
 
         <div className="h-8 w-px bg-gray-300"></div>
 

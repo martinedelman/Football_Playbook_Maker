@@ -21,6 +21,7 @@ export interface PlayerState {
   label: string; // número o nombre del jugador
   x: number;
   y: number;
+  color?: string; // color del jugador (hex)
 }
 
 export interface PlayerRoute {
