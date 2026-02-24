@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { Play, PlayerState, PlayerRoute, AnnotationStroke, Point, PlaySide } from "@/entities";
+import { useState, useEffect } from "react";
+import { Play, PlayerState, PlayerRoute, AnnotationStroke, Point, PlaySide, PlayerTemplate } from "@/entities";
 import { playService } from "@/services/playService";
 import { formationService } from "@/services/formationService";
+import { playerTemplateService } from "@/services/playerTemplateService";
 import FieldCanvas from "./FieldCanvas";
 import Toolbar from "./Toolbar";
 
@@ -18,6 +19,20 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
   const [toolMode, setToolMode] = useState<ToolMode>("select");
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
+  const [playerTemplates, setPlayerTemplates] = useState<PlayerTemplate[]>([]);
+
+  useEffect(() => {
+    loadPlayerTemplates();
+  }, []);
+
+  const loadPlayerTemplates = async () => {
+    try {
+      const templates = await playerTemplateService.getAllPlayerTemplates();
+      setPlayerTemplates(templates);
+    } catch (error) {
+      console.error("Failed to load player templates:", error);
+    }
+  };
 
   const handlePlayersChange = async (players: PlayerState[]) => {
     try {
@@ -85,6 +100,40 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
     await handlePlayersChange(updatedPlayers);
   };
 
+  const handleApplyTemplateRoute = async (templateId: string, routeId: string) => {
+    if (!selectedPlayerId) return;
+
+    const template = playerTemplates.find((t) => t.id === templateId);
+    if (!template) return;
+
+    const namedRoute = template.routes.find((r) => r.id === routeId);
+    if (!namedRoute) return;
+
+    const player = play.players.find((p) => p.playerId === selectedPlayerId);
+    if (!player) return;
+
+    // Calculate offset between template player position and current player position
+    const templateX = template.initialX !== undefined ? template.initialX : 250;
+    const templateY = template.initialY !== undefined ? template.initialY : 150;
+    const offsetX = player.x - templateX;
+    const offsetY = player.y - templateY;
+
+    // Apply offset to all route points
+    const adjustedPoints = namedRoute.points.map((point) => ({
+      x: point.x + offsetX,
+      y: point.y + offsetY,
+    }));
+
+    // Remove existing route for this player and add new one
+    const existingRoutes = play.routes.filter((r) => r.playerId !== selectedPlayerId);
+    const newRoute: PlayerRoute = {
+      playerId: selectedPlayerId,
+      points: adjustedPoints,
+    };
+
+    await handleRoutesChange([...existingRoutes, newRoute]);
+  };
+
   const selectedPlayer = play.players.find((p) => p.playerId === selectedPlayerId);
 
   return (
@@ -106,11 +155,14 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
         onToolModeChange={setToolMode}
         playSide={play.side}
         selectedPlayerId={selectedPlayerId}
+        selectedPlayerLabel={selectedPlayer?.label}
         selectedPlayerColor={selectedPlayer?.color}
         onPlayerColorChange={handlePlayerColorChange}
         onSaveFormation={handleSaveFormation}
         onLoadFormation={handleLoadFormation}
         onClearAnnotations={handleClearAnnotations}
+        playerTemplates={playerTemplates}
+        onApplyTemplateRoute={handleApplyTemplateRoute}
       />
 
       {/* Canvas */}
