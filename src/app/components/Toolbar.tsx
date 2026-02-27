@@ -1,13 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Formation, PlaySide, PlayerTemplate } from "@/entities";
+import { Formation, PlaySide, PlayerTemplate, RouteStyle } from "@/entities";
 import { formationService } from "@/services/formationService";
 import { ToolMode } from "./PlayEditor";
 
 interface ToolbarProps {
   toolMode: ToolMode;
   onToolModeChange: (mode: ToolMode) => void;
+  routeStyle: RouteStyle;
+  onRouteStyleChange: (style: RouteStyle) => void;
   playSide: PlaySide;
   selectedPlayerId: string | null;
   selectedPlayerLabel: string | undefined;
@@ -23,6 +25,8 @@ interface ToolbarProps {
 export default function Toolbar({
   toolMode,
   onToolModeChange,
+  routeStyle,
+  onRouteStyleChange,
   playSide,
   selectedPlayerId,
   selectedPlayerLabel,
@@ -97,6 +101,36 @@ export default function Toolbar({
             ✏️ Pen
           </button>
         </div>
+
+        {/* Route style selection - only in route mode */}
+        {toolMode === "route" && (
+          <>
+            <div className="h-8 w-px bg-gray-300"></div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => onRouteStyleChange(RouteStyle.STRAIGHT)}
+                className={`px-4 py-2 text-sm font-medium rounded ${
+                  routeStyle === RouteStyle.STRAIGHT
+                    ? "bg-green-600 text-white"
+                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                }`}
+              >
+                📏 Recto
+              </button>
+              <button
+                onClick={() => onRouteStyleChange(RouteStyle.CURVED)}
+                className={`px-4 py-2 text-sm font-medium rounded ${
+                  routeStyle === RouteStyle.CURVED
+                    ? "bg-green-600 text-white"
+                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                }`}
+              >
+                〰️ Curvo
+              </button>
+            </div>
+          </>
+        )}
 
         {/* Formation actions - only in select mode */}
         {toolMode === "select" && (

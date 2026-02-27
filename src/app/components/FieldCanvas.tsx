@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, MouseEvent, PointerEvent } from "react";
-import { PlayerState, PlayerRoute, AnnotationStroke, Point, PlaySide } from "@/entities";
+import { PlayerState, PlayerRoute, AnnotationStroke, Point, PlaySide, RouteStyle } from "@/entities";
 import { ToolMode } from "./PlayEditor";
 import { generateUUID } from "@/utils/uuid";
 
@@ -10,6 +10,7 @@ interface FieldCanvasProps {
   routes: PlayerRoute[];
   annotations: AnnotationStroke[];
   toolMode: ToolMode;
+  routeStyle: RouteStyle;
   selectedPlayerId: string | null;
   playSide: PlaySide;
   onPlayersChange: (players: PlayerState[]) => void;
@@ -45,6 +46,7 @@ export default function FieldCanvas({
   routes,
   annotations,
   toolMode,
+  routeStyle,
   selectedPlayerId,
   playSide,
   onPlayersChange,
@@ -283,6 +285,39 @@ export default function FieldCanvas({
     return `${start} ${lines}`;
   };
 
+  // Points to smooth SVG path using quadratic Bezier curves
+  const pointsToSmoothPath = (points: Point[]): string => {
+    if (points.length === 0) return "";
+    if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+    if (points.length === 2) return `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`;
+
+    let path = `M ${points[0].x} ${points[0].y}`;
+
+    // For smooth curves, we'll use quadratic bezier curves (Q command)
+    // Each point becomes a control point, and we draw to the midpoint between consecutive points
+    for (let i = 0; i < points.length - 1; i++) {
+      const current = points[i];
+      const next = points[i + 1];
+
+      if (i === 0) {
+        // First segment: draw a curve from start to midpoint using next point as control
+        const midX = (current.x + next.x) / 2;
+        const midY = (current.y + next.y) / 2;
+        path += ` Q ${current.x} ${current.y} ${midX} ${midY}`;
+      } else if (i === points.length - 2) {
+        // Last segment: draw from previous midpoint to end using current point as control
+        path += ` Q ${current.x} ${current.y} ${next.x} ${next.y}`;
+      } else {
+        // Middle segments: draw from previous midpoint to next midpoint using current point as control
+        const midX = (current.x + next.x) / 2;
+        const midY = (current.y + next.y) / 2;
+        path += ` Q ${current.x} ${current.y} ${midX} ${midY}`;
+      }
+    }
+
+    return path;
+  };
+
   const pointsEqual = (a: Point, b: Point, epsilon = 0.5): boolean => {
     return Math.abs(a.x - b.x) < epsilon && Math.abs(a.y - b.y) < epsilon;
   };
@@ -332,6 +367,43 @@ export default function FieldCanvas({
     };
 
     return `M ${from.x} ${from.y} L ${tip.x} ${tip.y} L ${upperPoint.x} ${upperPoint.y} M ${tip.x} ${tip.y} L ${lowerPoint.x} ${lowerPoint.y}`;
+  };
+
+  // Create arrow head only (V shape) without the connecting line - for curved routes
+  const createArrowHeadOnly = (from: Point, to: Point): string => {
+    const angle = Math.atan2(to.y - from.y, to.x - from.x);
+    const headLength = 7.5;
+    const headWidth = 6.25;
+
+    const cosA = Math.cos(angle);
+    const sinA = Math.sin(angle);
+
+    // Punta
+    const tip = { x: to.x, y: to.y };
+
+    // Base de la cabeza (punto hacia atrás)
+    const headBase = {
+      x: tip.x - cosA * headLength,
+      y: tip.y - sinA * headLength,
+    };
+
+    // Perpendicular para calcular los puntos de la V
+    const perpX = -Math.sin(angle);
+    const perpY = Math.cos(angle);
+
+    // Puntos de la punta (V)
+    const upperPoint = {
+      x: headBase.x + perpX * headWidth,
+      y: headBase.y + perpY * headWidth,
+    };
+
+    const lowerPoint = {
+      x: headBase.x - perpX * headWidth,
+      y: headBase.y - perpY * headWidth,
+    };
+
+    // Only draw the V shape without the connecting line
+    return `M ${upperPoint.x} ${upperPoint.y} L ${tip.x} ${tip.y} L ${lowerPoint.x} ${lowerPoint.y}`;
   };
 
   return (
@@ -434,7 +506,7 @@ export default function FieldCanvas({
           return (
             <g key={`route-${route.playerId}-${routeIdx}`}>
               <path
-                d={pointsToPath(allPoints)}
+                d={routeStyle === RouteStyle.CURVED ? pointsToSmoothPath(allPoints) : pointsToPath(allPoints)}
                 stroke={routeColor}
                 strokeWidth={2}
                 fill="none"
@@ -442,7 +514,11 @@ export default function FieldCanvas({
               />
               {allPoints.length >= 2 && (
                 <path
-                  d={createArrowPath(allPoints[allPoints.length - 2], allPoints[allPoints.length - 1])}
+                  d={
+                    routeStyle === RouteStyle.CURVED
+                      ? createArrowHeadOnly(allPoints[allPoints.length - 2], allPoints[allPoints.length - 1])
+                      : createArrowPath(allPoints[allPoints.length - 2], allPoints[allPoints.length - 1])
+                  }
                   stroke={routeColor}
                   strokeWidth={2}
                   strokeLinecap="round"
@@ -451,15 +527,19 @@ export default function FieldCanvas({
                 />
               )}
               {/* Route points (exclude last point so arrow is clean) */}
-              {route.points.slice(0, -1).map((point, idx) => (
-                <circle
-                  key={`route-point-${route.playerId}-${routeIdx}-${idx}`}
-                  cx={point.x}
-                  cy={point.y}
-                  r={3}
-                  fill={routeColor}
-                />
-              ))}
+              {routeStyle != RouteStyle.CURVED
+                ? route.points
+                    .slice(0, -1)
+                    .map((point, idx) => (
+                      <circle
+                        key={`route-point-${route.playerId}-${routeIdx}-${idx}`}
+                        cx={point.x}
+                        cy={point.y}
+                        r={3}
+                        fill={routeColor}
+                      />
+                    ))
+                : null}
             </g>
           );
         })}
@@ -483,10 +563,19 @@ export default function FieldCanvas({
               const routeColor = player.color || COLORS.ROUTE_LINE;
               return (
                 <>
-                  <path d={pointsToPath(allPoints)} stroke={routeColor} strokeWidth={2} fill="none" />
+                  <path
+                    d={routeStyle === RouteStyle.CURVED ? pointsToSmoothPath(allPoints) : pointsToPath(allPoints)}
+                    stroke={routeColor}
+                    strokeWidth={2}
+                    fill="none"
+                  />
                   {allPoints.length >= 2 && (
                     <path
-                      d={createArrowPath(allPoints[allPoints.length - 2], allPoints[allPoints.length - 1])}
+                      d={
+                        routeStyle === RouteStyle.CURVED
+                          ? createArrowHeadOnly(allPoints[allPoints.length - 2], allPoints[allPoints.length - 1])
+                          : createArrowPath(allPoints[allPoints.length - 2], allPoints[allPoints.length - 1])
+                      }
                       stroke={routeColor}
                       strokeWidth={2}
                       strokeLinecap="round"

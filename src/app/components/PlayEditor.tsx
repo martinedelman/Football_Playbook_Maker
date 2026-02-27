@@ -1,7 +1,16 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Play, PlayerState, PlayerRoute, AnnotationStroke, Point, PlaySide, PlayerTemplate } from "@/entities";
+import {
+  Play,
+  PlayerState,
+  PlayerRoute,
+  AnnotationStroke,
+  Point,
+  PlaySide,
+  PlayerTemplate,
+  RouteStyle,
+} from "@/entities";
 import { playService } from "@/services/playService";
 import { formationService } from "@/services/formationService";
 import { playerTemplateService } from "@/services/playerTemplateService";
@@ -18,12 +27,18 @@ interface PlayEditorProps {
 export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
   const [toolMode, setToolMode] = useState<ToolMode>("select");
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const [routeStyle, setRouteStyle] = useState<RouteStyle>(play.routeStyle || RouteStyle.STRAIGHT);
   const [isDirty, setIsDirty] = useState(false);
   const [playerTemplates, setPlayerTemplates] = useState<PlayerTemplate[]>([]);
 
   useEffect(() => {
     loadPlayerTemplates();
   }, []);
+
+  // Sync routeStyle when play changes
+  useEffect(() => {
+    setRouteStyle(play.routeStyle || RouteStyle.STRAIGHT);
+  }, [play.id, play.routeStyle]);
 
   const loadPlayerTemplates = async () => {
     try {
@@ -66,6 +81,16 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
 
   const handleClearAnnotations = async () => {
     await handleAnnotationsChange([]);
+  };
+
+  const handleRouteStyleChange = async (newRouteStyle: RouteStyle) => {
+    setRouteStyle(newRouteStyle);
+    try {
+      const updated = await playService.updatePlayRouteStyle(play.id, newRouteStyle);
+      onUpdate(updated);
+    } catch (error) {
+      console.error("Failed to update route style:", error);
+    }
   };
 
   const handleSaveFormation = async (name: string) => {
@@ -153,6 +178,8 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
       <Toolbar
         toolMode={toolMode}
         onToolModeChange={setToolMode}
+        routeStyle={routeStyle}
+        onRouteStyleChange={handleRouteStyleChange}
         playSide={play.side}
         selectedPlayerId={selectedPlayerId}
         selectedPlayerLabel={selectedPlayer?.label}
@@ -172,6 +199,7 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
           routes={play.routes}
           annotations={play.annotations}
           toolMode={toolMode}
+          routeStyle={routeStyle}
           selectedPlayerId={selectedPlayerId}
           playSide={play.side}
           onPlayersChange={handlePlayersChange}

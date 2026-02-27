@@ -15,6 +15,11 @@ export enum RouteType {
   DASHED = "dashed",
 }
 
+export enum RouteStyle {
+  STRAIGHT = "straight",
+  CURVED = "curved",
+}
+
 // Entidades principales
 export interface PlayerState {
   playerId: string;
@@ -54,6 +59,7 @@ export interface Play {
   players: PlayerState[];
   routes: PlayerRoute[];
   annotations: AnnotationStroke[];
+  routeStyle?: RouteStyle;
   createdAt: string;
   updatedAt: string;
 }
@@ -110,6 +116,7 @@ export interface UpdatePlayDTO {
   routes?: PlayerRoute[];
   annotations?: AnnotationStroke[];
   formationId?: string;
+  routeStyle?: RouteStyle;
 }
 
 export interface CreatePlayerTemplateDTO {

@@ -10,6 +10,7 @@ import {
   UpdatePlayDTO,
   UpdatePlayerTemplateDTO,
   PlaySide,
+  RouteStyle,
 } from "@/entities";
 import { PlaybookRepository, PlayRepository, FormationRepository, PlayerTemplateRepository } from "./repositories";
 import { generateUUID } from "@/utils/uuid";
@@ -128,6 +129,7 @@ export class LocalStoragePlayRepository implements PlayRepository {
       players: defaultPlayers,
       routes: [],
       annotations: [],
+      routeStyle: RouteStyle.STRAIGHT,
       createdAt: now,
       updatedAt: now,
     };

@@ -1,4 +1,4 @@
-import { Play, CreatePlayDTO, UpdatePlayDTO, PlayerState, PlayerRoute, AnnotationStroke } from "@/entities";
+import { Play, CreatePlayDTO, UpdatePlayDTO, PlayerState, PlayerRoute, AnnotationStroke, RouteStyle } from "@/entities";
 import Container from "@/dataAccess/container";
 
 export class PlayService {
@@ -81,6 +81,17 @@ export class PlayService {
     } catch (error) {
       console.error(`Error updating play annotations ${id}:`, error);
       throw new Error("Failed to update annotations");
+    }
+  }
+
+  async updatePlayRouteStyle(id: string, routeStyle: RouteStyle): Promise<Play> {
+    try {
+      const repo = Container.getPlayRepository();
+      const dto: UpdatePlayDTO = { routeStyle };
+      return await repo.update(id, dto);
+    } catch (error) {
+      console.error(`Error updating play route style ${id}:`, error);
+      throw new Error("Failed to update route style");
     }
   }
 
