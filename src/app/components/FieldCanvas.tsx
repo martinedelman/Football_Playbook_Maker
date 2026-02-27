@@ -145,9 +145,16 @@ export default function FieldCanvas({
 
   const handleCanvasDoubleClick = (e: MouseEvent<SVGSVGElement>) => {
     if (toolMode === "route" && currentRoute.length > 0 && selectedPlayerId) {
-      const endPoint = screenToSVG(e.clientX, e.clientY);
+      let endPoint = screenToSVG(e.clientX, e.clientY);
       const updatedPoints = [...currentRoute];
       const last = updatedPoints[updatedPoints.length - 1];
+
+      const player = players.find((p) => p.playerId === selectedPlayerId) || null;
+      const prev = updatedPoints.length >= 2 ? updatedPoints[updatedPoints.length - 2] : player;
+
+      if (prev) {
+        endPoint = { x: last.x, y: last.y };
+      }
 
       if (!pointsEqual(last, endPoint)) {
         updatedPoints.push(endPoint);
