@@ -193,6 +193,66 @@ export default function PlaybookList({
           ))}
         </div>
       </div>
+      {/* Create Play section (only if playbook selected) */}
+      {selectedPlaybook && (
+        <div className="p-4 border-t border-gray-200 bg-gray-50">
+          {isCreatingPlay ? (
+            <div className="space-y-2">
+              <input
+                type="text"
+                value={newPlayName}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPlayName(e.target.value)}
+                onKeyDown={(e: React.KeyboardEvent) => e.key === "Enter" && handleCreatePlay()}
+                placeholder="Play name"
+                className="w-full px-2 py-1 text-sm border rounded"
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setNewPlaySide(PlaySide.OFFENSE)}
+                  className={`flex-1 px-2 py-1 text-xs rounded ${
+                    newPlaySide === PlaySide.OFFENSE ? "bg-blue-600 text-white" : "bg-gray-200"
+                  }`}
+                >
+                  Offense
+                </button>
+                <button
+                  onClick={() => setNewPlaySide(PlaySide.DEFENSE)}
+                  className={`flex-1 px-2 py-1 text-xs rounded ${
+                    newPlaySide === PlaySide.DEFENSE ? "bg-red-600 text-white" : "bg-gray-200"
+                  }`}
+                >
+                  Defense
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleCreatePlay}
+                  className="flex-1 px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
+                >
+                  Create
+                </button>
+                <button
+                  onClick={() => {
+                    setIsCreatingPlay(false);
+                    setNewPlayName("");
+                  }}
+                  className="flex-1 px-3 py-1 text-xs bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setIsCreatingPlay(true)}
+              className="w-full px-3 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700"
+            >
+              + New Play
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Player Templates section */}
       <div className="p-4 border-t border-gray-200">
@@ -265,67 +325,6 @@ export default function PlaybookList({
           ))}
         </div>
       </div>
-
-      {/* Create Play section (only if playbook selected) */}
-      {selectedPlaybook && (
-        <div className="p-4 border-t border-gray-200 bg-gray-50">
-          {isCreatingPlay ? (
-            <div className="space-y-2">
-              <input
-                type="text"
-                value={newPlayName}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPlayName(e.target.value)}
-                onKeyDown={(e: React.KeyboardEvent) => e.key === "Enter" && handleCreatePlay()}
-                placeholder="Play name"
-                className="w-full px-2 py-1 text-sm border rounded"
-                autoFocus
-              />
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setNewPlaySide(PlaySide.OFFENSE)}
-                  className={`flex-1 px-2 py-1 text-xs rounded ${
-                    newPlaySide === PlaySide.OFFENSE ? "bg-blue-600 text-white" : "bg-gray-200"
-                  }`}
-                >
-                  Offense
-                </button>
-                <button
-                  onClick={() => setNewPlaySide(PlaySide.DEFENSE)}
-                  className={`flex-1 px-2 py-1 text-xs rounded ${
-                    newPlaySide === PlaySide.DEFENSE ? "bg-red-600 text-white" : "bg-gray-200"
-                  }`}
-                >
-                  Defense
-                </button>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={handleCreatePlay}
-                  className="flex-1 px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
-                >
-                  Create
-                </button>
-                <button
-                  onClick={() => {
-                    setIsCreatingPlay(false);
-                    setNewPlayName("");
-                  }}
-                  className="flex-1 px-3 py-1 text-xs bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button
-              onClick={() => setIsCreatingPlay(true)}
-              className="w-full px-3 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700"
-            >
-              + New Play
-            </button>
-          )}
-        </div>
-      )}
     </div>
   );
 }
