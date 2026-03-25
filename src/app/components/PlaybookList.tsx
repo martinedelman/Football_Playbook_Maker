@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Playbook, Play, PlaySide, PlayerTemplate } from "@/entities";
 
 interface PlaybookListProps {
@@ -41,10 +41,19 @@ export default function PlaybookList({
   const [isCreatingPlaybook, setIsCreatingPlaybook] = useState(false);
   const [isCreatingPlay, setIsCreatingPlay] = useState(false);
   const [isCreatingPlayerTemplate, setIsCreatingPlayerTemplate] = useState(false);
+  const [isPlaybooksExpanded, setIsPlaybooksExpanded] = useState(true);
+  const [isPlayerTemplatesExpanded, setIsPlayerTemplatesExpanded] = useState(true);
+  const [expandedPlaybookId, setExpandedPlaybookId] = useState<string | null>(null);
   const [newPlaybookName, setNewPlaybookName] = useState("");
   const [newPlayName, setNewPlayName] = useState("");
   const [newPlayerTemplateName, setNewPlayerTemplateName] = useState("");
   const [newPlaySide, setNewPlaySide] = useState<PlaySide>(PlaySide.OFFENSE);
+
+  useEffect(() => {
+    if (selectedPlaybook) {
+      setExpandedPlaybookId(selectedPlaybook.id);
+    }
+  }, [selectedPlaybook]);
 
   const handleCreatePlaybook = () => {
     if (newPlaybookName.trim()) {
@@ -75,16 +84,24 @@ export default function PlaybookList({
       {/* Playbooks section */}
       <div className="p-4">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-gray-700 uppercase">Playbooks</h2>
           <button
-            onClick={() => setIsCreatingPlaybook(true)}
-            className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+            onClick={() => setIsPlaybooksExpanded((prev) => !prev)}
+            className="flex items-center gap-2 text-sm font-semibold text-gray-700 uppercase"
           >
-            + New
+            <span>{isPlaybooksExpanded ? "▾" : "▸"}</span>
+            <span>Playbooks</span>
           </button>
+          {isPlaybooksExpanded && (
+            <button
+              onClick={() => setIsCreatingPlaybook(true)}
+              className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              + New
+            </button>
+          )}
         </div>
 
-        {isCreatingPlaybook && (
+        {isPlaybooksExpanded && isCreatingPlaybook && (
           <div className="mb-3 p-2 bg-gray-50 rounded">
             <input
               type="text"
@@ -115,86 +132,94 @@ export default function PlaybookList({
           </div>
         )}
 
-        <div className="space-y-1">
-          {playbooks.map((pb) => (
-            <div key={pb.id}>
-              <div
-                onClick={() => onSelectPlaybook(pb)}
-                className={`flex items-center justify-between p-2 rounded cursor-pointer ${
-                  selectedPlaybook?.id === pb.id ? "bg-blue-100 text-blue-900" : "hover:bg-gray-100"
-                }`}
-              >
-                <span className="text-sm font-medium">{pb.name}</span>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onPrintPlaybook(pb);
-                    }}
-                    className="text-gray-600 hover:text-gray-800 text-sm"
-                    title="Print playbook"
-                    aria-label={`Print playbook ${pb.name}`}
-                  >
-                    🖨️
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (confirm("Delete this playbook?")) {
-                        onDeletePlaybook(pb.id);
-                      }
-                    }}
-                    className="text-red-500 hover:text-red-700 text-xs"
-                    title="Delete playbook"
-                    aria-label={`Delete playbook ${pb.name}`}
-                  >
-                    ×
-                  </button>
-                </div>
-              </div>
-
-              {/* Plays for selected playbook */}
-              {selectedPlaybook?.id === pb.id && pb.plays.length > 0 && (
-                <div className="ml-4 mt-1 space-y-1">
-                  {pb.plays.map((play) => (
-                    <div
-                      key={play.id}
-                      onClick={() => onSelectPlay(play)}
-                      className={`flex items-center justify-between p-2 rounded cursor-pointer text-sm ${
-                        selectedPlay?.id === play.id ? "bg-green-100 text-green-900" : "hover:bg-gray-50"
-                      }`}
+        {isPlaybooksExpanded && (
+          <div className="space-y-1">
+            {playbooks.map((pb) => (
+              <div key={pb.id}>
+                <div
+                  onClick={() => {
+                    onSelectPlaybook(pb);
+                    setExpandedPlaybookId((current) => (current === pb.id ? null : pb.id));
+                  }}
+                  className={`flex items-center justify-between p-2 rounded cursor-pointer ${
+                    selectedPlaybook?.id === pb.id ? "bg-blue-100 text-blue-900" : "hover:bg-gray-100"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs">{expandedPlaybookId === pb.id ? "▾" : "▸"}</span>
+                    <span className="text-sm font-medium">{pb.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onPrintPlaybook(pb);
+                      }}
+                      className="text-gray-600 hover:text-gray-800 text-sm"
+                      title="Print playbook"
+                      aria-label={`Print playbook ${pb.name}`}
                     >
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`px-1.5 py-0.5 text-xs rounded ${
-                            play.side === PlaySide.OFFENSE ? "bg-blue-200 text-blue-800" : "bg-red-200 text-red-800"
-                          }`}
-                        >
-                          {play.side === PlaySide.OFFENSE ? "OFF" : "DEF"}
-                        </span>
-                        <span>{play.name}</span>
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (confirm("Delete this play?")) {
-                            onDeletePlay(play.id);
-                          }
-                        }}
-                        className="text-red-500 hover:text-red-700 text-xs"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
+                      🖨️
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm("Delete this playbook?")) {
+                          onDeletePlaybook(pb.id);
+                        }
+                      }}
+                      className="text-red-500 hover:text-red-700 text-xs"
+                      title="Delete playbook"
+                      aria-label={`Delete playbook ${pb.name}`}
+                    >
+                      ×
+                    </button>
+                  </div>
                 </div>
-              )}
-            </div>
-          ))}
-        </div>
+
+                {/* Plays for expanded playbook */}
+                {expandedPlaybookId === pb.id && pb.plays.length > 0 && (
+                  <div className="ml-4 mt-1 space-y-1">
+                    {pb.plays.map((play) => (
+                      <div
+                        key={play.id}
+                        onClick={() => onSelectPlay(play)}
+                        className={`flex items-center justify-between p-2 rounded cursor-pointer text-sm ${
+                          selectedPlay?.id === play.id ? "bg-green-100 text-green-900" : "hover:bg-gray-50"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`px-1.5 py-0.5 text-xs rounded ${
+                              play.side === PlaySide.OFFENSE ? "bg-blue-200 text-blue-800" : "bg-red-200 text-red-800"
+                            }`}
+                          >
+                            {play.side === PlaySide.OFFENSE ? "OFF" : "DEF"}
+                          </span>
+                          <span>{play.name}</span>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm("Delete this play?")) {
+                              onDeletePlay(play.id);
+                            }
+                          }}
+                          className="text-red-500 hover:text-red-700 text-xs"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
       {/* Create Play section (only if playbook selected) */}
-      {selectedPlaybook && (
+      {selectedPlaybook && isPlaybooksExpanded && (
         <div className="p-4 border-t border-gray-200 bg-gray-50">
           {isCreatingPlay ? (
             <div className="space-y-2">
@@ -257,16 +282,24 @@ export default function PlaybookList({
       {/* Player Templates section */}
       <div className="p-4 border-t border-gray-200">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-gray-700 uppercase">Player Templates</h2>
           <button
-            onClick={() => setIsCreatingPlayerTemplate(true)}
-            className="px-2 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700"
+            onClick={() => setIsPlayerTemplatesExpanded((prev) => !prev)}
+            className="flex items-center gap-2 text-sm font-semibold text-gray-700 uppercase"
           >
-            + New Player
+            <span>{isPlayerTemplatesExpanded ? "▾" : "▸"}</span>
+            <span>Player Templates</span>
           </button>
+          {isPlayerTemplatesExpanded && (
+            <button
+              onClick={() => setIsCreatingPlayerTemplate(true)}
+              className="px-2 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700"
+            >
+              + New Player
+            </button>
+          )}
         </div>
 
-        {isCreatingPlayerTemplate && (
+        {isPlayerTemplatesExpanded && isCreatingPlayerTemplate && (
           <div className="mb-3 p-2 bg-gray-50 rounded">
             <input
               type="text"
@@ -297,33 +330,35 @@ export default function PlaybookList({
           </div>
         )}
 
-        <div className="space-y-1">
-          {playerTemplates.map((template) => (
-            <div
-              key={template.id}
-              onClick={() => onSelectPlayerTemplate(template)}
-              className={`flex items-center justify-between p-2 rounded cursor-pointer ${
-                selectedPlayerTemplate?.id === template.id ? "bg-purple-100 text-purple-900" : "hover:bg-gray-100"
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">{template.name}</span>
-                <span className="text-xs text-gray-500">({template.routes.length} routes)</span>
-              </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (confirm("Delete this player template?")) {
-                    onDeletePlayerTemplate(template.id);
-                  }
-                }}
-                className="text-red-500 hover:text-red-700 text-xs"
+        {isPlayerTemplatesExpanded && (
+          <div className="space-y-1">
+            {playerTemplates.map((template) => (
+              <div
+                key={template.id}
+                onClick={() => onSelectPlayerTemplate(template)}
+                className={`flex items-center justify-between p-2 rounded cursor-pointer ${
+                  selectedPlayerTemplate?.id === template.id ? "bg-purple-100 text-purple-900" : "hover:bg-gray-100"
+                }`}
               >
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">{template.name}</span>
+                  <span className="text-xs text-gray-500">({template.routes.length} routes)</span>
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (confirm("Delete this player template?")) {
+                      onDeletePlayerTemplate(template.id);
+                    }
+                  }}
+                  className="text-red-500 hover:text-red-700 text-xs"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
