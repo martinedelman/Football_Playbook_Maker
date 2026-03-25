@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Playbook, Play, PlaySide, PlayerTemplate } from "@/entities";
 
 interface PlaybookListProps {
@@ -49,12 +49,6 @@ export default function PlaybookList({
   const [newPlayerTemplateName, setNewPlayerTemplateName] = useState("");
   const [newPlaySide, setNewPlaySide] = useState<PlaySide>(PlaySide.OFFENSE);
 
-  useEffect(() => {
-    if (selectedPlaybook) {
-      setExpandedPlaybookId(selectedPlaybook.id);
-    }
-  }, [selectedPlaybook]);
-
   const handleCreatePlaybook = () => {
     if (newPlaybookName.trim()) {
       onCreatePlaybook(newPlaybookName.trim());
@@ -79,6 +73,10 @@ export default function PlaybookList({
     }
   };
 
+  const togglePlaybookExpansion = (playbookId: string) => {
+    setExpandedPlaybookId((current) => (current === playbookId ? null : playbookId));
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Playbooks section */}
@@ -87,6 +85,8 @@ export default function PlaybookList({
           <button
             onClick={() => setIsPlaybooksExpanded((prev) => !prev)}
             className="flex items-center gap-2 text-sm font-semibold text-gray-700 uppercase"
+            aria-label="Toggle Playbooks section"
+            aria-expanded={isPlaybooksExpanded}
           >
             <span>{isPlaybooksExpanded ? "▾" : "▸"}</span>
             <span>Playbooks</span>
@@ -137,16 +137,23 @@ export default function PlaybookList({
             {playbooks.map((pb) => (
               <div key={pb.id}>
                 <div
-                  onClick={() => {
-                    onSelectPlaybook(pb);
-                    setExpandedPlaybookId((current) => (current === pb.id ? null : pb.id));
-                  }}
+                  onClick={() => onSelectPlaybook(pb)}
                   className={`flex items-center justify-between p-2 rounded cursor-pointer ${
                     selectedPlaybook?.id === pb.id ? "bg-blue-100 text-blue-900" : "hover:bg-gray-100"
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-xs">{expandedPlaybookId === pb.id ? "▾" : "▸"}</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        togglePlaybookExpansion(pb.id);
+                      }}
+                      className="p-1 text-xs hover:text-blue-600 focus:ring-2 focus:ring-blue-500 rounded"
+                      aria-label={`Toggle plays list for playbook ${pb.name}`}
+                      aria-expanded={expandedPlaybookId === pb.id}
+                    >
+                      {expandedPlaybookId === pb.id ? "▾" : "▸"}
+                    </button>
                     <span className="text-sm font-medium">{pb.name}</span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -178,39 +185,47 @@ export default function PlaybookList({
                 </div>
 
                 {/* Plays for expanded playbook */}
-                {expandedPlaybookId === pb.id && pb.plays.length > 0 && (
+                {expandedPlaybookId === pb.id && (
                   <div className="ml-4 mt-1 space-y-1">
-                    {pb.plays.map((play) => (
-                      <div
-                        key={play.id}
-                        onClick={() => onSelectPlay(play)}
-                        className={`flex items-center justify-between p-2 rounded cursor-pointer text-sm ${
-                          selectedPlay?.id === play.id ? "bg-green-100 text-green-900" : "hover:bg-gray-50"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`px-1.5 py-0.5 text-xs rounded ${
-                              play.side === PlaySide.OFFENSE ? "bg-blue-200 text-blue-800" : "bg-red-200 text-red-800"
-                            }`}
-                          >
-                            {play.side === PlaySide.OFFENSE ? "OFF" : "DEF"}
-                          </span>
-                          <span>{play.name}</span>
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (confirm("Delete this play?")) {
-                              onDeletePlay(play.id);
-                            }
-                          }}
-                          className="text-red-500 hover:text-red-700 text-xs"
+                    {pb.plays.length > 0 ? (
+                      pb.plays.map((play) => (
+                        <div
+                          key={play.id}
+                          onClick={() => onSelectPlay(play)}
+                          className={`flex items-center justify-between p-2 rounded cursor-pointer text-sm ${
+                            selectedPlay?.id === play.id ? "bg-green-100 text-green-900" : "hover:bg-gray-50"
+                          }`}
                         >
-                          ×
-                        </button>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`px-1.5 py-0.5 text-xs rounded ${
+                                play.side === PlaySide.OFFENSE ? "bg-blue-200 text-blue-800" : "bg-red-200 text-red-800"
+                              }`}
+                            >
+                              {play.side === PlaySide.OFFENSE ? "OFF" : "DEF"}
+                            </span>
+                            <span>{play.name}</span>
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm("Delete this play?")) {
+                                onDeletePlay(play.id);
+                              }
+                            }}
+                            className="text-red-500 hover:text-red-700 text-xs"
+                            title="Delete play"
+                            aria-label={`Delete play ${play.name}`}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      <div role="status" className="p-2 text-xs text-gray-500">
+                        No plays yet.
                       </div>
-                    ))}
+                    )}
                   </div>
                 )}
               </div>
@@ -219,7 +234,7 @@ export default function PlaybookList({
         )}
       </div>
       {/* Create Play section (only if playbook selected) */}
-      {selectedPlaybook && isPlaybooksExpanded && (
+      {selectedPlaybook && isPlaybooksExpanded && expandedPlaybookId === selectedPlaybook.id && (
         <div className="p-4 border-t border-gray-200 bg-gray-50">
           {isCreatingPlay ? (
             <div className="space-y-2">
@@ -285,6 +300,8 @@ export default function PlaybookList({
           <button
             onClick={() => setIsPlayerTemplatesExpanded((prev) => !prev)}
             className="flex items-center gap-2 text-sm font-semibold text-gray-700 uppercase"
+            aria-label="Toggle Player Templates section"
+            aria-expanded={isPlayerTemplatesExpanded}
           >
             <span>{isPlayerTemplatesExpanded ? "▾" : "▸"}</span>
             <span>Player Templates</span>
@@ -352,6 +369,8 @@ export default function PlaybookList({
                     }
                   }}
                   className="text-red-500 hover:text-red-700 text-xs"
+                  title="Delete player template"
+                  aria-label={`Delete player template ${template.name}`}
                 >
                   ×
                 </button>
