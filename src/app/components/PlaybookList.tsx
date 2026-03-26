@@ -142,19 +142,22 @@ export default function PlaybookList({
                     selectedPlaybook?.id === pb.id ? "bg-blue-100 text-blue-900" : "hover:bg-gray-100"
                   }`}
                 >
-                  <div className="flex items-center gap-2">
+                  <div
+                    className="flex items-center gap-2 w-full"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      togglePlaybookExpansion(pb.id);
+                      onSelectPlaybook(pb);
+                    }}
+                  >
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        togglePlaybookExpansion(pb.id);
-                      }}
                       className="p-1 text-xs hover:text-blue-600 focus:ring-2 focus:ring-blue-500 rounded"
                       aria-label={`Toggle plays list for playbook ${pb.name}`}
                       aria-expanded={expandedPlaybookId === pb.id}
                     >
                       {expandedPlaybookId === pb.id ? "▾" : "▸"}
                     </button>
-                    <span className="text-sm font-medium">{pb.name}</span>
+                    <span className="text-sm font-medium cursor-pointer">{pb.name}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <button

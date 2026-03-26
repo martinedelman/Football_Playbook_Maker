@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { PlayerTemplate, PlayerState, PlayerRoute, NamedRoute, Point, PlaySide } from "@/entities";
+import { PlayerTemplate, PlayerState, PlayerRoute, NamedRoute, Point, PlaySide, RouteStyle } from "@/entities";
 import { playerTemplateService } from "@/services/playerTemplateService";
 import FieldCanvas from "./FieldCanvas";
 import { ToolMode } from "./PlayEditor";
@@ -17,6 +17,7 @@ interface PlayerTemplateEditorProps {
 export default function PlayerTemplateEditor({ template, onUpdate }: PlayerTemplateEditorProps) {
   const [toolMode, setToolMode] = useState<ToolMode>("select");
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const [routeStyle, setRouteStyle] = useState<RouteStyle>(RouteStyle.STRAIGHT);
   const [currentRouteName, setCurrentRouteName] = useState("");
   const [routeBeingDrawn, setRouteBeingDrawn] = useState<PlayerRoute | null>(null);
   const [editingRouteId, setEditingRouteId] = useState<string | null>(null);
@@ -230,6 +231,7 @@ export default function PlayerTemplateEditor({ template, onUpdate }: PlayerTempl
             routes={routeBeingDrawn ? [routeBeingDrawn] : savedRoutesForDisplay}
             annotations={[]}
             toolMode={toolMode}
+            routeStyle={routeStyle}
             selectedPlayerId={selectedPlayerId}
             playSide={PlaySide.OFFENSE}
             onPlayersChange={handlePlayersChange}
