@@ -1,4 +1,4 @@
-import { Playbook, Play, PlaySide } from "@/entities";
+import { Playbook, Play, PlaySide, Point, RouteStyle } from "@/entities";
 
 const escapeHtml = (value: string): string =>
   value
@@ -8,13 +8,57 @@ const escapeHtml = (value: string): string =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
-const buildPlaySvg = (play: Play): string => {
-  const width = 500;
-  const height = 300;
-  const scrimmageY = 200;
-  const playerRadius = 12;
+const FIELD_WIDTH = 500;
+const FIELD_HEIGHT = 300;
+const SCRIMMAGE_Y = 200;
+const PLAYER_RADIUS = 12;
+const DEFAULT_ROUTE_COLOR = "#000000";
 
-  const createArrowPath = (from: { x: number; y: number }, to: { x: number; y: number }): string => {
+const pointsToPath = (points: Point[]): string => {
+  if (points.length === 0) return "";
+  const start = `M ${points[0].x} ${points[0].y}`;
+  const lines = points
+    .slice(1)
+    .map((point) => `L ${point.x} ${point.y}`)
+    .join(" ");
+  return `${start} ${lines}`;
+};
+
+const pointsToSmoothPath = (points: Point[]): string => {
+  if (points.length === 0) return "";
+  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+  if (points.length === 2) return `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`;
+
+  let path = `M ${points[0].x} ${points[0].y}`;
+
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const current = points[index];
+    const next = points[index + 1];
+
+    if (index === 0) {
+      const midX = (current.x + next.x) / 2;
+      const midY = (current.y + next.y) / 2;
+      path += ` Q ${current.x} ${current.y} ${midX} ${midY}`;
+      continue;
+    }
+
+    if (index === points.length - 2) {
+      path += ` Q ${current.x} ${current.y} ${next.x} ${next.y}`;
+      continue;
+    }
+
+    const midX = (current.x + next.x) / 2;
+    const midY = (current.y + next.y) / 2;
+    path += ` Q ${current.x} ${current.y} ${midX} ${midY}`;
+  }
+
+  return path;
+};
+
+const buildPlaySvg = (play: Play): string => {
+  const routeStyle = play.routeStyle || RouteStyle.STRAIGHT;
+
+  const createArrowPath = (from: Point, to: Point): string => {
     const angle = Math.atan2(to.y - from.y, to.x - from.x);
     const headLength = 7.5;
     const headWidth = 6.25;
@@ -44,38 +88,96 @@ const buildPlaySvg = (play: Play): string => {
     return `M ${upperPoint.x} ${upperPoint.y} L ${tip.x} ${tip.y} L ${lowerPoint.x} ${lowerPoint.y}`;
   };
 
+  const createArrowHeadOnly = (from: Point, to: Point): string => {
+    const angle = Math.atan2(to.y - from.y, to.x - from.x);
+    const headLength = 7.5;
+    const headWidth = 6.25;
+
+    const cosA = Math.cos(angle);
+    const sinA = Math.sin(angle);
+
+    const tip = { x: to.x, y: to.y };
+    const headBase = {
+      x: tip.x - cosA * headLength,
+      y: tip.y - sinA * headLength,
+    };
+
+    const perpX = -Math.sin(angle);
+    const perpY = Math.cos(angle);
+
+    const upperPoint = {
+      x: headBase.x + perpX * headWidth,
+      y: headBase.y + perpY * headWidth,
+    };
+
+    const lowerPoint = {
+      x: headBase.x - perpX * headWidth,
+      y: headBase.y - perpY * headWidth,
+    };
+
+    return `M ${upperPoint.x} ${upperPoint.y} L ${tip.x} ${tip.y} L ${lowerPoint.x} ${lowerPoint.y}`;
+  };
+
+  const annotationsSvg = play.annotations
+    .map((stroke) => {
+      if (stroke.points.length === 0) return "";
+      return `
+        <path
+          d="${pointsToPath(stroke.points)}"
+          stroke="${escapeHtml(stroke.color)}"
+          stroke-width="${stroke.width}"
+          fill="none"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      `;
+    })
+    .join("");
+
   const routesSvg = play.routes
     .map((route) => {
-      if (route.points.length < 2) return "";
+      if (route.points.length === 0) return "";
       const player = play.players.find((p) => p.playerId === route.playerId);
       if (!player) return "";
+
       const firstRoutePoint = route.points[0];
       const angle = Math.atan2(firstRoutePoint.y - player.y, firstRoutePoint.x - player.x);
       const startPoint = {
-        x: player.x + playerRadius * Math.cos(angle),
-        y: player.y + playerRadius * Math.sin(angle),
+        x: player.x + PLAYER_RADIUS * Math.cos(angle),
+        y: player.y + PLAYER_RADIUS * Math.sin(angle),
       };
       const allPoints = [startPoint, ...route.points];
-      const segments = allPoints
-        .slice(1)
-        .map((point, index) => {
-          const prev = allPoints[index];
-          return `<line x1="${prev.x}" y1="${prev.y}" x2="${point.x}" y2="${point.y}" />`;
-        })
-        .join("");
-      const last = allPoints[allPoints.length - 1];
-      const prev = allPoints[allPoints.length - 2];
-      const arrow = createArrowPath(prev, last);
+      const routeColor = player.color || DEFAULT_ROUTE_COLOR;
+      const routePath = routeStyle === RouteStyle.CURVED ? pointsToSmoothPath(allPoints) : pointsToPath(allPoints);
+      const arrow =
+        allPoints.length >= 2
+          ? routeStyle === RouteStyle.CURVED
+            ? createArrowHeadOnly(allPoints[allPoints.length - 2], allPoints[allPoints.length - 1])
+            : createArrowPath(allPoints[allPoints.length - 2], allPoints[allPoints.length - 1])
+          : "";
       const routePoints = route.points
         .slice(0, -1)
-        .map((point) => `<circle cx="${point.x}" cy="${point.y}" r="3" fill="#111827" />`)
+        .map((point) => `<circle cx="${point.x}" cy="${point.y}" r="3" fill="${escapeHtml(routeColor)}" />`)
         .join("");
+
       return `
-        <g fill="none" stroke="#111827" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          ${segments}
-          <path d="${arrow}" />
+        <g>
+          <path
+            d="${routePath}"
+            stroke="${escapeHtml(routeColor)}"
+            stroke-width="2"
+            fill="none"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            ${route.type === "dashed" ? 'stroke-dasharray="10,5"' : ""}
+          />
+          ${
+            arrow
+              ? `<path d="${arrow}" stroke="${escapeHtml(routeColor)}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />`
+              : ""
+          }
+          ${routeStyle === RouteStyle.CURVED ? "" : routePoints}
         </g>
-        ${routePoints}
       `;
     })
     .join("");
@@ -83,9 +185,11 @@ const buildPlaySvg = (play: Play): string => {
   const playersSvg = play.players
     .map((player) => {
       const label = escapeHtml(player.label);
+      const playerColor = player.color ? escapeHtml(player.color) : "#ffffff";
+      const playerFillOpacity = player.color ? "0.7" : "1";
       return `
         <g>
-          <circle cx="${player.x}" cy="${player.y}" r="${playerRadius}" fill="#ffffff" stroke="#111827" stroke-width="2" />
+          <circle cx="${player.x}" cy="${player.y}" r="${PLAYER_RADIUS}" fill="${playerColor}" fill-opacity="${playerFillOpacity}" stroke="#000000" stroke-width="2.5" />
           <text x="${player.x}" y="${player.y + 4}" text-anchor="middle" font-size="10" font-family="Arial" fill="#111827">${label}</text>
         </g>
       `;
@@ -93,10 +197,17 @@ const buildPlaySvg = (play: Play): string => {
     .join("");
 
   return `
-    <svg class="play-diagram" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Play diagram">
-      <rect x="0" y="0" width="${width}" height="${height}" fill="#ffffff" stroke="#e5e7eb" />
-      <rect x="0" y="${scrimmageY}" width="${width}" height="${height - scrimmageY}" fill="#fef3c7" opacity="0.4" />
-      <line x1="0" y1="${scrimmageY}" x2="${width}" y2="${scrimmageY}" stroke="#9ca3af" stroke-dasharray="4 4" />
+    <svg class="play-diagram" viewBox="0 0 ${FIELD_WIDTH} ${FIELD_HEIGHT}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Play diagram">
+      <rect x="0" y="0" width="${FIELD_WIDTH}" height="${FIELD_HEIGHT}" fill="#ffffff" />
+      <rect x="0" y="${(2 * FIELD_HEIGHT) / 3}" width="${FIELD_WIDTH}" height="${FIELD_HEIGHT / 3}" fill="#f5c5c1" opacity="0.5" />
+      <line x1="0" y1="${SCRIMMAGE_Y}" x2="${FIELD_WIDTH}" y2="${SCRIMMAGE_Y}" stroke="#000000" stroke-width="1" stroke-dasharray="15" />
+      ${Array.from({ length: 3 })
+        .map((_, index) => {
+          const y = (index * ((FIELD_HEIGHT / 3) * 2)) / 3;
+          return `<line x1="0" y1="${y}" x2="${FIELD_WIDTH}" y2="${y}" stroke="grey" stroke-width="1" opacity="0.3" />`;
+        })
+        .join("")}
+      ${annotationsSvg}
       ${routesSvg}
       ${playersSvg}
     </svg>
