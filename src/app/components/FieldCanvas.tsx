@@ -1,7 +1,16 @@
 "use client";
 
 import { useState, useRef, useEffect, MouseEvent, PointerEvent } from "react";
-import { PlayerState, PlayerRoute, AnnotationStroke, Point, PlaySide, RouteStyle } from "@/entities";
+import {
+  PlayerState,
+  PlayerRoute,
+  AnnotationStroke,
+  Point,
+  PlaySide,
+  RouteSegmentStyle,
+  RouteStyle,
+  RouteType,
+} from "@/entities";
 import { ToolMode } from "./PlayEditor";
 import { generateUUID } from "@/utils/uuid";
 import { useFeedback } from "./feedback/ToastProvider";
@@ -20,6 +29,9 @@ interface FieldCanvasProps {
   onAnnotationsChange: (annotations: AnnotationStroke[]) => void;
   onSelectPlayer: (playerId: string | null) => void;
   isAnnotationEraserActive?: boolean;
+  annotationColor?: string;
+  selectedRouteSegments?: Array<{ playerId: string; segmentIndex: number }>;
+  onRouteSegmentToggle?: (playerId: string, segmentIndex: number) => void;
 }
 
 const FIELD_WIDTH = 500;
@@ -57,6 +69,9 @@ export default function FieldCanvas({
   onAnnotationsChange,
   onSelectPlayer,
   isAnnotationEraserActive = false,
+  annotationColor = COLORS.ANNOTATION,
+  selectedRouteSegments = [],
+  onRouteSegmentToggle,
 }: FieldCanvasProps) {
   const { showToast } = useFeedback();
   const svgRef = useRef<SVGSVGElement>(null);
@@ -273,7 +288,7 @@ export default function FieldCanvas({
     if (isDrawingAnnotation && currentAnnotation.length > 1) {
       const newStroke: AnnotationStroke = {
         id: generateUUID(),
-        color: COLORS.ANNOTATION,
+        color: annotationColor,
         width: 3,
         points: currentAnnotation,
       };
@@ -332,6 +347,66 @@ export default function FieldCanvas({
 
     return path;
   };
+
+  const midpoint = (first: Point, second: Point): Point => ({
+    x: (first.x + second.x) / 2,
+    y: (first.y + second.y) / 2,
+  });
+
+  const createCorrugatedPath = (from: Point, to: Point): string => {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const length = Math.hypot(dx, dy);
+    if (length === 0) return `M ${from.x} ${from.y}`;
+
+    const sampleCount = Math.max(8, Math.ceil(length / 4));
+    const waveCount = Math.max(1, Math.round(length / 14));
+    const perpendicularX = -dy / length;
+    const perpendicularY = dx / length;
+    const points = Array.from({ length: sampleCount + 1 }, (_, index) => {
+      const progress = index / sampleCount;
+      const offset = Math.sin(progress * Math.PI * 2 * waveCount) * 3;
+      return {
+        x: from.x + dx * progress + perpendicularX * offset,
+        y: from.y + dy * progress + perpendicularY * offset,
+      };
+    });
+    return pointsToPath(points);
+  };
+
+  const getRouteSegmentPath = (
+    points: Point[],
+    segmentIndex: number,
+    segmentStyle: RouteSegmentStyle,
+  ): string => {
+    const from = points[segmentIndex];
+    const to = points[segmentIndex + 1];
+    if (!from || !to) return "";
+    const usesCurvedGeometry = routeStyle === RouteStyle.CURVED && points.length > 2;
+    if (!usesCurvedGeometry) {
+      return segmentStyle === RouteSegmentStyle.CORRUGATED
+        ? createCorrugatedPath(from, to)
+        : pointsToPath([from, to]);
+    }
+
+    const isFirst = segmentIndex === 0;
+    const isLast = segmentIndex === points.length - 2;
+    const visualStart = isFirst ? from : midpoint(points[segmentIndex - 1], from);
+    const visualEnd = isLast ? to : midpoint(from, to);
+    if (segmentStyle === RouteSegmentStyle.CORRUGATED) {
+      return createCorrugatedPath(visualStart, visualEnd);
+    }
+
+    if (isFirst) {
+      return `M ${visualStart.x} ${visualStart.y} Q ${from.x} ${from.y} ${visualEnd.x} ${visualEnd.y}`;
+    }
+
+    return `M ${visualStart.x} ${visualStart.y} Q ${from.x} ${from.y} ${visualEnd.x} ${visualEnd.y}`;
+  };
+
+  const getRouteSegmentStyle = (route: PlayerRoute, segmentIndex: number): RouteSegmentStyle =>
+    route.segmentStyles?.[segmentIndex] ??
+    (route.type === RouteType.DASHED ? RouteSegmentStyle.DASHED : RouteSegmentStyle.SOLID);
 
   const pointsEqual = (a: Point, b: Point, epsilon = 0.5): boolean => {
     return Math.abs(a.x - b.x) < epsilon && Math.abs(a.y - b.y) < epsilon;
@@ -498,7 +573,7 @@ export default function FieldCanvas({
         {isDrawingAnnotation && currentAnnotation.length > 0 && (
           <path
             d={pointsToPath(currentAnnotation)}
-            stroke={COLORS.ANNOTATION}
+            stroke={annotationColor}
             strokeWidth={3}
             fill="none"
             strokeLinecap="round"
@@ -525,20 +600,43 @@ export default function FieldCanvas({
 
           return (
             <g key={`route-${route.playerId}-${routeIdx}`}>
-              <path
-                d={routeStyle === RouteStyle.CURVED ? pointsToSmoothPath(allPoints) : pointsToPath(allPoints)}
-                stroke={routeColor}
-                strokeWidth={2}
-                fill="none"
-                strokeDasharray={route.type === "dashed" ? "10,5" : undefined}
-              />
+              {route.points.map((_, segmentIndex) => {
+                const segmentStyle = getRouteSegmentStyle(route, segmentIndex);
+                const segmentPath = getRouteSegmentPath(allPoints, segmentIndex, segmentStyle);
+                const isSelected = selectedRouteSegments.some(
+                  (selection) =>
+                    selection.playerId === route.playerId && selection.segmentIndex === segmentIndex,
+                );
+
+                return (
+                  <g key={`route-segment-${route.playerId}-${segmentIndex}`}>
+                    {isSelected && (
+                      <path
+                        d={segmentPath}
+                        stroke="#2563eb"
+                        strokeWidth={8}
+                        strokeOpacity={0.25}
+                        fill="none"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    )}
+                    <path
+                      data-route-segment={`${route.playerId}:${segmentIndex}`}
+                      d={segmentPath}
+                      stroke={routeColor}
+                      strokeWidth={2}
+                      fill="none"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeDasharray={segmentStyle === RouteSegmentStyle.DASHED ? "10,5" : undefined}
+                    />
+                  </g>
+                );
+              })}
               {allPoints.length >= 2 && (
                 <path
-                  d={
-                    routeStyle === RouteStyle.CURVED
-                      ? createArrowHeadOnly(allPoints[allPoints.length - 2], allPoints[allPoints.length - 1])
-                      : createArrowPath(allPoints[allPoints.length - 2], allPoints[allPoints.length - 1])
-                  }
+                  d={createArrowHeadOnly(allPoints[allPoints.length - 2], allPoints[allPoints.length - 1])}
                   stroke={routeColor}
                   strokeWidth={2}
                   strokeLinecap="round"
@@ -664,6 +762,46 @@ export default function FieldCanvas({
             </g>
           );
         })}
+
+        {/* Route segments are selected independently through wide invisible hit targets. */}
+        {toolMode === "route" &&
+          onRouteSegmentToggle &&
+          routes.flatMap((route) => {
+            const player = players.find((item) => item.playerId === route.playerId);
+            if (!player || route.points.length === 0) return [];
+
+            const firstRoutePoint = route.points[0];
+            const angle = Math.atan2(firstRoutePoint.y - player.y, firstRoutePoint.x - player.x);
+            const allPoints = [
+              {
+                x: player.x + PLAYER_RADIUS * Math.cos(angle),
+                y: player.y + PLAYER_RADIUS * Math.sin(angle),
+              },
+              ...route.points,
+            ];
+
+            return route.points.map((_, segmentIndex) => {
+              const segmentStyle = getRouteSegmentStyle(route, segmentIndex);
+              return (
+                <path
+                  key={`route-selector-${route.playerId}-${segmentIndex}`}
+                  data-route-segment-selector={`${route.playerId}:${segmentIndex}`}
+                  d={getRouteSegmentPath(allPoints, segmentIndex, segmentStyle)}
+                  stroke="transparent"
+                  strokeWidth={14}
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  pointerEvents="stroke"
+                  style={{ cursor: "pointer" }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onRouteSegmentToggle(route.playerId, segmentIndex);
+                  }}
+                />
+              );
+            });
+          })}
 
         {/* Wide invisible targets rendered on top make annotations easy to select with the eraser. */}
         {toolMode === "pen" &&

@@ -9,6 +9,8 @@ import {
   Point,
   PlaySide,
   PlayerTemplate,
+  RouteSegmentStyle,
+  RouteType,
   RouteStyle,
 } from "@/entities";
 import { playService } from "@/services/playService";
@@ -33,6 +35,10 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
   const [routeStyle, setRouteStyle] = useState<RouteStyle>(play.routeStyle || RouteStyle.STRAIGHT);
   const [isDirty, setIsDirty] = useState(false);
   const [isAnnotationEraserActive, setIsAnnotationEraserActive] = useState(false);
+  const [annotationColor, setAnnotationColor] = useState("#000000");
+  const [selectedRouteSegments, setSelectedRouteSegments] = useState<
+    Array<{ playerId: string; segmentIndex: number }>
+  >([]);
   const [playerTemplates, setPlayerTemplates] = useState<PlayerTemplate[]>([]);
 
   const loadPlayerTemplates = useCallback(async () => {
@@ -52,6 +58,7 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
   // Sync routeStyle when play changes
   useEffect(() => {
     setRouteStyle(play.routeStyle || RouteStyle.STRAIGHT);
+    setSelectedRouteSegments([]);
   }, [play.id, play.routeStyle]);
 
   const handlePlayersChange = async (players: PlayerState[]) => {
@@ -69,6 +76,12 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
     try {
       const updated = await playService.updatePlayRoutes(play.id, routes);
       onUpdate(updated);
+      setSelectedRouteSegments((current) =>
+        current.filter((selection) => {
+          const route = routes.find((item) => item.playerId === selection.playerId);
+          return route !== undefined && selection.segmentIndex < route.points.length;
+        }),
+      );
       setIsDirty(false);
     } catch (error) {
       console.error("Failed to update routes:", error);
@@ -101,6 +114,44 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
   const handleToolModeChange = (mode: ToolMode) => {
     setToolMode(mode);
     if (mode !== "pen") setIsAnnotationEraserActive(false);
+    if (mode !== "route") setSelectedRouteSegments([]);
+  };
+
+  const handleRouteSegmentToggle = (playerId: string, segmentIndex: number) => {
+    setSelectedRouteSegments((current) => {
+      const isSelected = current.some(
+        (selection) => selection.playerId === playerId && selection.segmentIndex === segmentIndex,
+      );
+      return isSelected
+        ? current.filter(
+            (selection) => selection.playerId !== playerId || selection.segmentIndex !== segmentIndex,
+          )
+        : [...current, { playerId, segmentIndex }];
+    });
+  };
+
+  const handleRouteSegmentStyleChange = async (style: RouteSegmentStyle) => {
+    if (selectedRouteSegments.length === 0) return;
+
+    const updatedRoutes = play.routes.map((route) => {
+      const selectedIndexes = selectedRouteSegments
+        .filter((selection) => selection.playerId === route.playerId)
+        .map((selection) => selection.segmentIndex);
+      if (selectedIndexes.length === 0) return route;
+
+      const legacyStyle = route.type === RouteType.DASHED ? RouteSegmentStyle.DASHED : RouteSegmentStyle.SOLID;
+      const segmentStyles = Array.from(
+        { length: route.points.length },
+        (_, index) => route.segmentStyles?.[index] ?? legacyStyle,
+      );
+      selectedIndexes.forEach((index) => {
+        if (index >= 0 && index < segmentStyles.length) segmentStyles[index] = style;
+      });
+
+      return { ...route, type: undefined, segmentStyles };
+    });
+
+    await handleRoutesChange(updatedRoutes);
   };
 
   const handleRouteStyleChange = async (newRouteStyle: RouteStyle) => {
@@ -201,6 +252,8 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
         onToolModeChange={handleToolModeChange}
         routeStyle={routeStyle}
         onRouteStyleChange={handleRouteStyleChange}
+        selectedRouteSegmentCount={selectedRouteSegments.length}
+        onRouteSegmentStyleChange={handleRouteSegmentStyleChange}
         playSide={play.side}
         selectedPlayerId={selectedPlayerId}
         selectedPlayerLabel={selectedPlayer?.label}
@@ -212,6 +265,8 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
         onClearLastAnnotation={handleClearLastAnnotation}
         isAnnotationEraserActive={isAnnotationEraserActive}
         onAnnotationEraserChange={setIsAnnotationEraserActive}
+        annotationColor={annotationColor}
+        onAnnotationColorChange={setAnnotationColor}
         playerTemplates={playerTemplates}
         onApplyTemplateRoute={handleApplyTemplateRoute}
       />
@@ -231,6 +286,9 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
           onAnnotationsChange={handleAnnotationsChange}
           onSelectPlayer={setSelectedPlayerId}
           isAnnotationEraserActive={isAnnotationEraserActive}
+          annotationColor={annotationColor}
+          selectedRouteSegments={selectedRouteSegments}
+          onRouteSegmentToggle={handleRouteSegmentToggle}
         />
       </div>
     </div>

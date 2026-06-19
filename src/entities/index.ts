@@ -15,6 +15,12 @@ export enum RouteType {
   DASHED = "dashed",
 }
 
+export enum RouteSegmentStyle {
+  SOLID = "solid",
+  DASHED = "dashed",
+  CORRUGATED = "corrugated",
+}
+
 export enum RouteStyle {
   STRAIGHT = "straight",
   CURVED = "curved",
@@ -33,6 +39,7 @@ export interface PlayerRoute {
   playerId: string;
   points: Point[];
   type?: RouteType;
+  segmentStyles?: RouteSegmentStyle[];
 }
 
 export interface AnnotationStroke {

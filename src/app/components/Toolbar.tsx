@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Formation, PlaySide, PlayerTemplate, RouteStyle } from "@/entities";
+import { useCallback, useState, useEffect } from "react";
+import { Formation, PlaySide, PlayerTemplate, RouteSegmentStyle, RouteStyle } from "@/entities";
 import { formationService } from "@/services/formationService";
 import { ToolMode } from "./PlayEditor";
 
@@ -10,6 +10,8 @@ interface ToolbarProps {
   onToolModeChange: (mode: ToolMode) => void;
   routeStyle: RouteStyle;
   onRouteStyleChange: (style: RouteStyle) => void;
+  selectedRouteSegmentCount: number;
+  onRouteSegmentStyleChange: (style: RouteSegmentStyle) => void;
   playSide: PlaySide;
   selectedPlayerId: string | null;
   selectedPlayerLabel: string | undefined;
@@ -21,6 +23,8 @@ interface ToolbarProps {
   onClearLastAnnotation: () => void;
   isAnnotationEraserActive: boolean;
   onAnnotationEraserChange: (active: boolean) => void;
+  annotationColor: string;
+  onAnnotationColorChange: (color: string) => void;
   playerTemplates: PlayerTemplate[];
   onApplyTemplateRoute: (templateId: string, routeId: string) => void;
 }
@@ -30,6 +34,8 @@ export default function Toolbar({
   onToolModeChange,
   routeStyle,
   onRouteStyleChange,
+  selectedRouteSegmentCount,
+  onRouteSegmentStyleChange,
   playSide,
   selectedPlayerId,
   selectedPlayerLabel,
@@ -41,6 +47,8 @@ export default function Toolbar({
   onClearLastAnnotation,
   isAnnotationEraserActive,
   onAnnotationEraserChange,
+  annotationColor,
+  onAnnotationColorChange,
   playerTemplates,
   onApplyTemplateRoute,
 }: ToolbarProps) {
@@ -48,21 +56,21 @@ export default function Toolbar({
   const [showSaveFormation, setShowSaveFormation] = useState(false);
   const [formationName, setFormationName] = useState("");
 
-  useEffect(() => {
-    loadFormations();
-  }, []);
-
-  const loadFormations = async () => {
+  const loadFormations = useCallback(async () => {
     const data = await formationService.getAllFormations();
     setFormations(data.filter((f) => f.side === playSide));
-  };
+  }, [playSide]);
+
+  useEffect(() => {
+    void loadFormations();
+  }, [loadFormations]);
 
   const handleSaveFormation = () => {
     if (formationName.trim()) {
       onSaveFormation(formationName.trim());
       setFormationName("");
       setShowSaveFormation(false);
-      loadFormations();
+      void loadFormations();
     }
   };
 
@@ -133,6 +141,36 @@ export default function Toolbar({
                 }`}
               >
                 〰️ Curvo
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Line style applies only to the route segments selected on the field. */}
+        {toolMode === "route" && selectedRouteSegmentCount > 0 && (
+          <>
+            <div className="h-8 w-px bg-gray-300"></div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium text-gray-700">
+                {selectedRouteSegmentCount} segment{selectedRouteSegmentCount === 1 ? "" : "s"} selected:
+              </span>
+              <button
+                onClick={() => onRouteSegmentStyleChange(RouteSegmentStyle.SOLID)}
+                className="px-3 py-2 text-sm font-medium rounded bg-gray-800 text-white hover:bg-gray-900"
+              >
+                ━ Solid
+              </button>
+              <button
+                onClick={() => onRouteSegmentStyleChange(RouteSegmentStyle.DASHED)}
+                className="px-3 py-2 text-sm font-medium rounded bg-gray-600 text-white hover:bg-gray-700"
+              >
+                ┅ Dashed
+              </button>
+              <button
+                onClick={() => onRouteSegmentStyleChange(RouteSegmentStyle.CORRUGATED)}
+                className="px-3 py-2 text-sm font-medium rounded bg-purple-600 text-white hover:bg-purple-700"
+              >
+                〰 Corrugated
               </button>
             </div>
           </>
@@ -252,6 +290,16 @@ export default function Toolbar({
             <div className="h-8 w-px bg-gray-300"></div>
 
             <div className="flex flex-wrap gap-2">
+              <label className="flex items-center gap-2 rounded border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700">
+                Color
+                <input
+                  type="color"
+                  value={annotationColor}
+                  onChange={(event) => onAnnotationColorChange(event.target.value)}
+                  className="h-8 w-10 cursor-pointer rounded border-0 bg-transparent p-0"
+                  aria-label="Annotation color"
+                />
+              </label>
               <button
                 onClick={onClearAnnotations}
                 className="px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700"
@@ -289,7 +337,7 @@ export default function Toolbar({
           "• Load a pre-made route from dropdown, or click to draw route points manually. Double-click to finish."}
         {toolMode === "route" &&
           (!selectedPlayerId || matchingTemplates.length === 0) &&
-          "• Click a player, then click to draw route points. Double-click to finish."}
+          "• Click a player to draw a route, or click existing route segments to select and style them."}
         {toolMode === "pen" &&
           (isAnnotationEraserActive
             ? "• Click an annotation to erase it"

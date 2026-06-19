@@ -1,4 +1,13 @@
-import { Playbook, Play, PlaySide, Point, RouteStyle } from "@/entities";
+import {
+  Playbook,
+  Play,
+  PlaySide,
+  PlayerRoute,
+  Point,
+  RouteSegmentStyle,
+  RouteStyle,
+  RouteType,
+} from "@/entities";
 
 const escapeHtml = (value: string): string =>
   value
@@ -53,6 +62,68 @@ const pointsToSmoothPath = (points: Point[]): string => {
   }
 
   return path;
+};
+
+const midpoint = (first: Point, second: Point): Point => ({
+  x: (first.x + second.x) / 2,
+  y: (first.y + second.y) / 2,
+});
+
+const createCorrugatedPath = (from: Point, to: Point): string => {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const length = Math.hypot(dx, dy);
+  if (length === 0) return `M ${from.x} ${from.y}`;
+
+  const sampleCount = Math.max(8, Math.ceil(length / 4));
+  const waveCount = Math.max(1, Math.round(length / 14));
+  const perpendicularX = -dy / length;
+  const perpendicularY = dx / length;
+  return pointsToPath(
+    Array.from({ length: sampleCount + 1 }, (_, index) => {
+      const progress = index / sampleCount;
+      const offset = Math.sin(progress * Math.PI * 2 * waveCount) * 3;
+      return {
+        x: from.x + dx * progress + perpendicularX * offset,
+        y: from.y + dy * progress + perpendicularY * offset,
+      };
+    }),
+  );
+};
+
+const getRouteSegmentStyle = (route: PlayerRoute, segmentIndex: number): RouteSegmentStyle =>
+  route.segmentStyles?.[segmentIndex] ??
+  (route.type === RouteType.DASHED ? RouteSegmentStyle.DASHED : RouteSegmentStyle.SOLID);
+
+const getRouteSegmentPath = (
+  points: Point[],
+  segmentIndex: number,
+  segmentStyle: RouteSegmentStyle,
+  routeStyle: RouteStyle,
+): string => {
+  const from = points[segmentIndex];
+  const to = points[segmentIndex + 1];
+  if (!from || !to) return "";
+  const usesCurvedGeometry = routeStyle === RouteStyle.CURVED && points.length > 2;
+  if (!usesCurvedGeometry) {
+    return segmentStyle === RouteSegmentStyle.CORRUGATED
+      ? createCorrugatedPath(from, to)
+      : pointsToPath([from, to]);
+  }
+
+  const isFirst = segmentIndex === 0;
+  const isLast = segmentIndex === points.length - 2;
+  const visualStart = isFirst ? from : midpoint(points[segmentIndex - 1], from);
+  const visualEnd = isLast ? to : midpoint(from, to);
+  if (segmentStyle === RouteSegmentStyle.CORRUGATED) {
+    return createCorrugatedPath(visualStart, visualEnd);
+  }
+
+  if (isFirst) {
+    return `M ${visualStart.x} ${visualStart.y} Q ${from.x} ${from.y} ${visualEnd.x} ${visualEnd.y}`;
+  }
+
+  return `M ${visualStart.x} ${visualStart.y} Q ${from.x} ${from.y} ${visualEnd.x} ${visualEnd.y}`;
 };
 
 const buildPlaySvg = (play: Play): string => {
@@ -148,7 +219,21 @@ const buildPlaySvg = (play: Play): string => {
       };
       const allPoints = [startPoint, ...route.points];
       const routeColor = player.color || DEFAULT_ROUTE_COLOR;
-      const routePath = routeStyle === RouteStyle.CURVED ? pointsToSmoothPath(allPoints) : pointsToPath(allPoints);
+      const routeSegments = route.points
+        .map((_, segmentIndex) => {
+          const segmentStyle = getRouteSegmentStyle(route, segmentIndex);
+          const segmentPath = getRouteSegmentPath(allPoints, segmentIndex, segmentStyle, routeStyle);
+          return `<path
+            d="${segmentPath}"
+            stroke="${escapeHtml(routeColor)}"
+            stroke-width="2"
+            fill="none"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            ${segmentStyle === RouteSegmentStyle.DASHED ? 'stroke-dasharray="10,5"' : ""}
+          />`;
+        })
+        .join("");
       const arrow =
         allPoints.length >= 2
           ? routeStyle === RouteStyle.CURVED
@@ -162,15 +247,7 @@ const buildPlaySvg = (play: Play): string => {
 
       return `
         <g>
-          <path
-            d="${routePath}"
-            stroke="${escapeHtml(routeColor)}"
-            stroke-width="2"
-            fill="none"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            ${route.type === "dashed" ? 'stroke-dasharray="10,5"' : ""}
-          />
+          ${routeSegments}
           ${
             arrow
               ? `<path d="${arrow}" stroke="${escapeHtml(routeColor)}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />`
