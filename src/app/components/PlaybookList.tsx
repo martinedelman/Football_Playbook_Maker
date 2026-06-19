@@ -383,7 +383,9 @@ export default function PlaybookList({
                                 >
                                   {play.side === PlaySide.OFFENSE ? "OFF" : "DEF"}
                                 </span>
-                                <span className="truncate">{play.name}</span>
+                                <span className="truncate">
+                                  {playIndex + 1}. {play.name}
+                                </span>
                               </div>
                               <div className="flex items-center gap-2">
                                 <button
