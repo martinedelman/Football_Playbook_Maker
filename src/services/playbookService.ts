@@ -51,6 +51,28 @@ export class PlaybookService {
     }
   }
 
+  async reorderPlays(id: string, orderedPlayIds: string[]): Promise<Playbook> {
+    try {
+      const repo = Container.getPlaybookRepository();
+      const playbook = await repo.getById(id);
+      if (!playbook) throw new Error("Playbook not found");
+
+      const currentIds = new Set(playbook.plays.map((play) => play.id));
+      const hasSamePlays =
+        orderedPlayIds.length === playbook.plays.length &&
+        new Set(orderedPlayIds).size === currentIds.size &&
+        orderedPlayIds.every((playId) => currentIds.has(playId));
+      if (!hasSamePlays) throw new Error("Invalid play order");
+
+      const playsById = new Map(playbook.plays.map((play) => [play.id, play]));
+      const reorderedPlays = orderedPlayIds.map((playId) => playsById.get(playId)!);
+      return await repo.update(id, { plays: reorderedPlays });
+    } catch (error) {
+      console.error(`Error reordering plays for playbook ${id}:`, error);
+      throw new Error("Failed to reorder plays");
+    }
+  }
+
   async deletePlaybook(id: string): Promise<void> {
     try {
       const repo = Container.getPlaybookRepository();

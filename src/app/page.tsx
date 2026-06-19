@@ -311,6 +311,42 @@ export default function Home() {
     }
   };
 
+  const handleReorderPlays = async (playbookId: string, orderedPlayIds: string[]): Promise<boolean> => {
+    const originalPlaybook = playbooks.find((playbook) => playbook.id === playbookId);
+    if (!originalPlaybook) return false;
+
+    const playsById = new Map(originalPlaybook.plays.map((play) => [play.id, play]));
+    const reorderedPlays = orderedPlayIds.map((playId) => playsById.get(playId)).filter((play): play is Play => !!play);
+    if (reorderedPlays.length !== originalPlaybook.plays.length) return false;
+
+    const optimisticPlaybook = { ...originalPlaybook, plays: reorderedPlays };
+    setPlaybooks((current) =>
+      current.map((playbook) => (playbook.id === playbookId ? optimisticPlaybook : playbook)),
+    );
+    setSelectedPlaybook((current) => (current?.id === playbookId ? optimisticPlaybook : current));
+
+    try {
+      const persistedPlaybook = await playbookService.reorderPlays(playbookId, orderedPlayIds);
+      setPlaybooks((current) =>
+        current.map((playbook) => (playbook.id === playbookId ? persistedPlaybook : playbook)),
+      );
+      setSelectedPlaybook((current) => (current?.id === playbookId ? persistedPlaybook : current));
+      return true;
+    } catch (error) {
+      console.error("Failed to reorder plays:", error);
+      setPlaybooks((current) =>
+        current.map((playbook) => (playbook.id === playbookId ? originalPlaybook : playbook)),
+      );
+      setSelectedPlaybook((current) => (current?.id === playbookId ? originalPlaybook : current));
+      showToast({
+        status: FeedbackStatus.ERROR,
+        title: "Play order was not saved",
+        message: "The previous order has been restored.",
+      });
+      return false;
+    }
+  };
+
   const handleDeletePlay = async (id: string): Promise<boolean> => {
     try {
       await playService.deletePlay(id);
@@ -419,6 +455,7 @@ export default function Home() {
           onPrintPlaybook={handlePrintPlaybook}
           onCreatePlay={handleCreatePlay}
           onRenamePlay={handleRenamePlay}
+          onReorderPlays={handleReorderPlays}
           onSelectPlay={handleSelectPlay}
           onDeletePlay={handleDeletePlay}
           onCreatePlayerTemplate={handleCreatePlayerTemplate}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Playbook, Play, PlaySide, PlayerTemplate } from "@/entities";
 import Modal from "./feedback/Modal";
 import { FeedbackStatus } from "./feedback/types";
@@ -29,6 +29,7 @@ interface PlaybookListProps {
   onPrintPlaybook: (playbook: Playbook) => void;
   onCreatePlay: (name: string, side: PlaySide) => Promise<boolean>;
   onRenamePlay: (id: string, name: string) => Promise<boolean>;
+  onReorderPlays: (playbookId: string, orderedPlayIds: string[]) => Promise<boolean>;
   onSelectPlay: (play: Play) => void;
   onDeletePlay: (id: string) => Promise<boolean>;
   onCreatePlayerTemplate: (name: string) => Promise<boolean>;
@@ -49,6 +50,7 @@ export default function PlaybookList({
   onPrintPlaybook,
   onCreatePlay,
   onRenamePlay,
+  onReorderPlays,
   onSelectPlay,
   onDeletePlay,
   onCreatePlayerTemplate,
@@ -62,6 +64,63 @@ export default function PlaybookList({
   const [inputValue, setInputValue] = useState("");
   const [newPlaySide, setNewPlaySide] = useState<PlaySide>(PlaySide.OFFENSE);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [draggedPlay, setDraggedPlay] = useState<{ playbookId: string; playId: string } | null>(null);
+  const [dropTarget, setDropTarget] = useState<{
+    playbookId: string;
+    playId: string;
+    position: "before" | "after";
+  } | null>(null);
+  const [reorderingPlaybookId, setReorderingPlaybookId] = useState<string | null>(null);
+  const [settledPlayId, setSettledPlayId] = useState<string | null>(null);
+  const settleTimer = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (settleTimer.current !== null) window.clearTimeout(settleTimer.current);
+    },
+    [],
+  );
+
+  const animateSettledPlay = (playId: string) => {
+    if (settleTimer.current !== null) window.clearTimeout(settleTimer.current);
+    setSettledPlayId(playId);
+    settleTimer.current = window.setTimeout(() => {
+      setSettledPlayId(null);
+      settleTimer.current = null;
+    }, 320);
+  };
+
+  const reorderPlay = async (playbook: Playbook, playId: string, destinationIndex: number) => {
+    if (reorderingPlaybookId) return;
+    const sourceIndex = playbook.plays.findIndex((play) => play.id === playId);
+    if (sourceIndex === -1) return;
+
+    const boundedDestination = Math.max(0, Math.min(destinationIndex, playbook.plays.length - 1));
+    if (sourceIndex === boundedDestination) return;
+
+    const orderedPlayIds = playbook.plays.map((play) => play.id);
+    const [movedPlayId] = orderedPlayIds.splice(sourceIndex, 1);
+    orderedPlayIds.splice(boundedDestination, 0, movedPlayId);
+
+    setReorderingPlaybookId(playbook.id);
+    animateSettledPlay(playId);
+    await onReorderPlays(playbook.id, orderedPlayIds);
+    setReorderingPlaybookId(null);
+  };
+
+  const handleDrop = async (playbook: Playbook, targetPlayId: string, position: "before" | "after") => {
+    if (!draggedPlay || draggedPlay.playbookId !== playbook.id) return;
+
+    const sourceIndex = playbook.plays.findIndex((play) => play.id === draggedPlay.playId);
+    const targetIndex = playbook.plays.findIndex((play) => play.id === targetPlayId);
+    if (sourceIndex === -1 || targetIndex === -1) return;
+
+    let insertionIndex = targetIndex + (position === "after" ? 1 : 0);
+    if (sourceIndex < insertionIndex) insertionIndex -= 1;
+    await reorderPlay(playbook, draggedPlay.playId, insertionIndex);
+    setDraggedPlay(null);
+    setDropTarget(null);
+  };
 
   const openDialog = (nextDialog: DialogState, initialValue = "") => {
     setDialog(nextDialog);
@@ -238,50 +297,122 @@ export default function PlaybookList({
                 {expandedPlaybookId === pb.id && (
                   <div className="ml-4 mt-1 space-y-1">
                     {pb.plays.length > 0 ? (
-                      pb.plays.map((play) => (
-                        <div
-                          key={play.id}
-                          onClick={() => onSelectPlay(play)}
-                          className={`flex items-center justify-between p-2 rounded cursor-pointer text-sm ${
-                            selectedPlay?.id === play.id ? "bg-green-100 text-green-900" : "hover:bg-gray-50"
-                          }`}
-                        >
-                          <div className="flex min-w-0 flex-1 items-center gap-2">
-                            <span
-                              className={`px-1.5 py-0.5 text-xs rounded ${
-                                play.side === PlaySide.OFFENSE ? "bg-blue-200 text-blue-800" : "bg-red-200 text-red-800"
+                      pb.plays.map((play, playIndex) => {
+                        const isDragging = draggedPlay?.playId === play.id;
+                        const targetPosition =
+                          dropTarget?.playbookId === pb.id && dropTarget.playId === play.id
+                            ? dropTarget.position
+                            : null;
+
+                        return (
+                          <div
+                            key={play.id}
+                            className="relative"
+                            onDragOver={(event) => {
+                              if (!draggedPlay || draggedPlay.playbookId !== pb.id || draggedPlay.playId === play.id) {
+                                return;
+                              }
+                              event.preventDefault();
+                              event.dataTransfer.dropEffect = "move";
+                              const bounds = event.currentTarget.getBoundingClientRect();
+                              const position = event.clientY < bounds.top + bounds.height / 2 ? "before" : "after";
+                              setDropTarget({ playbookId: pb.id, playId: play.id, position });
+                            }}
+                            onDrop={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              const bounds = event.currentTarget.getBoundingClientRect();
+                              const position = event.clientY < bounds.top + bounds.height / 2 ? "before" : "after";
+                              void handleDrop(pb, play.id, position);
+                            }}
+                          >
+                            {targetPosition && (
+                              <div
+                                className={`pointer-events-none absolute left-1 right-1 z-10 h-0.5 animate-pulse rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)] ${
+                                  targetPosition === "before" ? "-top-0.5" : "-bottom-0.5"
+                                }`}
+                                aria-hidden="true"
+                              />
+                            )}
+                            <div
+                              data-play-row={play.id}
+                              onClick={() => onSelectPlay(play)}
+                              className={`flex items-center justify-between rounded p-2 text-sm transition-all duration-200 ease-out ${
+                                selectedPlay?.id === play.id
+                                  ? "bg-green-100 text-green-900"
+                                  : "hover:bg-gray-50"
+                              } ${isDragging ? "scale-[0.98] opacity-40 shadow-inner" : "opacity-100"} ${
+                                settledPlayId === play.id ? "play-drop-settle" : ""
                               }`}
                             >
-                              {play.side === PlaySide.OFFENSE ? "OFF" : "DEF"}
-                            </span>
-                            <span>{play.name}</span>
+                              <div className="flex min-w-0 flex-1 items-center gap-2">
+                                <button
+                                  type="button"
+                                  draggable={reorderingPlaybookId === null}
+                                  onClick={(event) => event.stopPropagation()}
+                                  onDragStart={(event) => {
+                                    const row = event.currentTarget.closest(`[data-play-row="${play.id}"]`);
+                                    if (row instanceof HTMLElement) event.dataTransfer.setDragImage(row, 16, 16);
+                                    event.dataTransfer.effectAllowed = "move";
+                                    event.dataTransfer.setData("text/plain", play.id);
+                                    setDraggedPlay({ playbookId: pb.id, playId: play.id });
+                                  }}
+                                  onDragEnd={() => {
+                                    setDraggedPlay(null);
+                                    setDropTarget(null);
+                                  }}
+                                  onKeyDown={(event) => {
+                                    if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    const destinationIndex = playIndex + (event.key === "ArrowUp" ? -1 : 1);
+                                    void reorderPlay(pb, play.id, destinationIndex);
+                                  }}
+                                  className="shrink-0 cursor-grab rounded px-1 py-0.5 text-base leading-none text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-700 active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  title="Drag to reorder. Alt + Arrow Up/Down also moves this play."
+                                  aria-label={`Reorder play ${play.name}. Use drag and drop or Alt plus Arrow Up or Arrow Down.`}
+                                >
+                                  ⠿
+                                </button>
+                                <span
+                                  className={`px-1.5 py-0.5 text-xs rounded ${
+                                    play.side === PlaySide.OFFENSE
+                                      ? "bg-blue-200 text-blue-800"
+                                      : "bg-red-200 text-red-800"
+                                  }`}
+                                >
+                                  {play.side === PlaySide.OFFENSE ? "OFF" : "DEF"}
+                                </span>
+                                <span className="truncate">{play.name}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openDialog({ type: "rename-play", item: play }, play.name);
+                                  }}
+                                  className="text-blue-600 hover:text-blue-800 text-xs"
+                                  title="Rename play"
+                                  aria-label={`Rename play ${play.name}`}
+                                >
+                                  ✎
+                                </button>
+                                <button
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openDialog({ type: "delete-play", item: play });
+                                  }}
+                                  className="text-red-500 hover:text-red-700 text-xs"
+                                  title="Delete play"
+                                  aria-label={`Delete play ${play.name}`}
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                openDialog({ type: "rename-play", item: play }, play.name);
-                              }}
-                              className="text-blue-600 hover:text-blue-800 text-xs"
-                              title="Rename play"
-                              aria-label={`Rename play ${play.name}`}
-                            >
-                              ✎
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openDialog({ type: "delete-play", item: play });
-                              }}
-                              className="text-red-500 hover:text-red-700 text-xs"
-                              title="Delete play"
-                              aria-label={`Delete play ${play.name}`}
-                            >
-                              ×
-                            </button>
-                          </div>
-                        </div>
-                      ))
+                        );
+                      })
                     ) : (
                       <div role="status" className="p-2 text-xs text-gray-500">
                         No plays yet.
