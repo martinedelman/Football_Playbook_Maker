@@ -10,6 +10,7 @@ import PlaybookList from "@/app/components/PlaybookList";
 import PlayEditor from "@/app/components/PlayEditor";
 import PlayerTemplateEditor from "@/app/components/PlayerTemplateEditor";
 import WelcomeGuide from "@/app/components/WelcomeGuide";
+import ResizableSidebar from "@/app/components/ResizableSidebar";
 import { buildPlaybookPrintHtml } from "@/app/components/PlaybookPrintPage";
 import { useFeedback } from "@/app/components/feedback/ToastProvider";
 import { FeedbackStatus } from "@/app/components/feedback/types";
@@ -438,7 +439,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gray-100 flex">
       {/* Sidebar */}
-      <aside className="w-80 bg-white border-r border-gray-200 shadow-sm overflow-y-auto">
+      <ResizableSidebar>
         <div className="p-4 border-b border-gray-200">
           <h1 className="text-2xl font-bold text-gray-800">Flag Football</h1>
           <p className="text-sm text-gray-500">Playbook Maker</p>
@@ -463,10 +464,10 @@ export default function Home() {
           onSelectPlayerTemplate={handleSelectPlayerTemplate}
           onDeletePlayerTemplate={handleDeletePlayerTemplate}
         />
-      </aside>
+      </ResizableSidebar>
 
       {/* Main content */}
-      <main className="flex-1 overflow-hidden">
+      <main className="min-w-0 flex-1 overflow-hidden">
         {selectedPlay ? (
           <PlayEditor play={selectedPlay} onUpdate={handleUpdatePlay} />
         ) : selectedPlayerTemplate ? (
