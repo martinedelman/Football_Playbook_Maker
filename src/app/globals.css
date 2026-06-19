@@ -21,3 +21,92 @@ body {
 * {
   box-sizing: border-box;
 }
+
+@keyframes feedback-toast-in {
+  from {
+    opacity: 0;
+    transform: translate3d(28px, -8px, 0) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes feedback-toast-out {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(28px, -8px, 0) scale(0.96);
+  }
+}
+
+@keyframes feedback-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes feedback-backdrop-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes feedback-modal-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -12px, 0) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes feedback-modal-out {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(0, -8px, 0) scale(0.98);
+  }
+}
+
+.feedback-toast-enter {
+  animation: feedback-toast-in 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.feedback-toast-exit {
+  animation: feedback-toast-out 200ms ease-in both;
+}
+
+.feedback-modal-backdrop-enter {
+  animation: feedback-backdrop-in 180ms ease-out both;
+}
+
+.feedback-modal-backdrop-exit {
+  animation: feedback-backdrop-out 200ms ease-in both;
+}
+
+.feedback-modal-panel-enter {
+  animation: feedback-modal-in 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.feedback-modal-panel-exit {
+  animation: feedback-modal-out 180ms ease-in both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feedback-toast-enter,
+  .feedback-toast-exit,
+  .feedback-modal-backdrop-enter,
+  .feedback-modal-backdrop-exit,
+  .feedback-modal-panel-enter,
+  .feedback-modal-panel-exit {
+    animation-duration: 1ms;
+  }
+}

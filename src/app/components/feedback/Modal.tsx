@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useEffect } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { FeedbackStatus } from "./types";
 
 interface ModalProps {
@@ -46,11 +46,53 @@ export default function Modal({
   onConfirm,
   onClose,
 }: ModalProps) {
+  const [shouldRender, setShouldRender] = useState(isOpen);
+  const [isVisible, setIsVisible] = useState(false);
+  const displayedContent = useRef({
+    status,
+    title,
+    children,
+    confirmLabel,
+    cancelLabel,
+    isConfirmDisabled,
+    isLoading,
+  });
+
+  if (isOpen) {
+    displayedContent.current = {
+      status,
+      title,
+      children,
+      confirmLabel,
+      cancelLabel,
+      isConfirmDisabled,
+      isLoading,
+    };
+  }
+
   useEffect(() => {
-    if (!isOpen) return;
+    let frame: number | undefined;
+    let timeout: number | undefined;
+
+    if (isOpen) {
+      setShouldRender(true);
+      frame = window.requestAnimationFrame(() => setIsVisible(true));
+    } else {
+      setIsVisible(false);
+      timeout = window.setTimeout(() => setShouldRender(false), 220);
+    }
+
+    return () => {
+      if (frame !== undefined) window.cancelAnimationFrame(frame);
+      if (timeout !== undefined) window.clearTimeout(timeout);
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!shouldRender) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !isLoading) onClose();
+      if (event.key === "Escape" && isOpen && !isLoading) onClose();
     };
 
     document.addEventListener("keydown", handleKeyDown);
@@ -59,25 +101,30 @@ export default function Modal({
       document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = "";
     };
-  }, [isLoading, isOpen, onClose]);
+  }, [isLoading, isOpen, onClose, shouldRender]);
 
-  if (!isOpen) return null;
+  if (!shouldRender) return null;
 
-  const styles = statusStyles[status];
+  const displayed = displayedContent.current;
+  const styles = statusStyles[displayed.status];
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 ${
+        isVisible ? "feedback-modal-backdrop-enter" : "feedback-modal-backdrop-exit pointer-events-none"
+      }`}
       role="presentation"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !isLoading) onClose();
+        if (event.target === event.currentTarget && !displayed.isLoading) onClose();
       }}
     >
       <section
         role="dialog"
         aria-modal="true"
         aria-labelledby="feedback-modal-title"
-        className="w-full max-w-md overflow-hidden rounded-xl bg-white shadow-2xl"
+        className={`w-full max-w-md overflow-hidden rounded-xl bg-white shadow-2xl ${
+          isVisible ? "feedback-modal-panel-enter" : "feedback-modal-panel-exit"
+        }`}
       >
         <div className={`flex items-center gap-3 border-l-4 px-5 py-4 ${styles.accent}`}>
           <span
@@ -87,12 +134,12 @@ export default function Modal({
             {styles.icon}
           </span>
           <h2 id="feedback-modal-title" className="text-lg font-semibold">
-            {title}
+            {displayed.title}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            disabled={isLoading}
+            disabled={displayed.isLoading}
             className="ml-auto rounded p-1 text-xl leading-none hover:bg-black/10 disabled:opacity-50"
             aria-label="Close modal"
           >
@@ -100,30 +147,33 @@ export default function Modal({
           </button>
         </div>
 
-        <div className="px-5 py-5 text-sm text-gray-700">{children}</div>
+        <div className="px-5 py-5 text-sm text-gray-700">{displayed.children}</div>
 
         <div className="flex justify-end gap-3 border-t border-gray-200 bg-gray-50 px-5 py-4">
-          {status !== FeedbackStatus.ERROR && (
+          {displayed.status !== FeedbackStatus.ERROR && (
             <button
               type="button"
               onClick={onClose}
-              disabled={isLoading}
+              disabled={displayed.isLoading}
               className="rounded-md border border-gray-300 bg-white px-4 py-2 font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50"
             >
-              {cancelLabel}
+              {displayed.cancelLabel}
             </button>
           )}
           <button
             type="button"
             onClick={onConfirm ?? onClose}
-            disabled={isConfirmDisabled || isLoading}
+            disabled={displayed.isConfirmDisabled || displayed.isLoading}
             className={`rounded-md px-4 py-2 font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${styles.button}`}
           >
-            {isLoading ? "Saving..." : status === FeedbackStatus.ERROR ? "Close" : confirmLabel}
+            {displayed.isLoading
+              ? "Saving..."
+              : displayed.status === FeedbackStatus.ERROR
+                ? "Close"
+                : displayed.confirmLabel}
           </button>
         </div>
       </section>
     </div>
   );
 }
-
