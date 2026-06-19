@@ -32,6 +32,7 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [routeStyle, setRouteStyle] = useState<RouteStyle>(play.routeStyle || RouteStyle.STRAIGHT);
   const [isDirty, setIsDirty] = useState(false);
+  const [isAnnotationEraserActive, setIsAnnotationEraserActive] = useState(false);
   const [playerTemplates, setPlayerTemplates] = useState<PlayerTemplate[]>([]);
 
   const loadPlayerTemplates = useCallback(async () => {
@@ -88,6 +89,18 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
 
   const handleClearAnnotations = async () => {
     await handleAnnotationsChange([]);
+  };
+
+  const handleClearLastAnnotation = async () => {
+    if (play.annotations.length === 0) return;
+    const updatedAnnotations = [...play.annotations];
+    updatedAnnotations.pop();
+    await handleAnnotationsChange(updatedAnnotations);
+  };
+
+  const handleToolModeChange = (mode: ToolMode) => {
+    setToolMode(mode);
+    if (mode !== "pen") setIsAnnotationEraserActive(false);
   };
 
   const handleRouteStyleChange = async (newRouteStyle: RouteStyle) => {
@@ -185,7 +198,7 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
       {/* Toolbar */}
       <Toolbar
         toolMode={toolMode}
-        onToolModeChange={setToolMode}
+        onToolModeChange={handleToolModeChange}
         routeStyle={routeStyle}
         onRouteStyleChange={handleRouteStyleChange}
         playSide={play.side}
@@ -196,6 +209,9 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
         onSaveFormation={handleSaveFormation}
         onLoadFormation={handleLoadFormation}
         onClearAnnotations={handleClearAnnotations}
+        onClearLastAnnotation={handleClearLastAnnotation}
+        isAnnotationEraserActive={isAnnotationEraserActive}
+        onAnnotationEraserChange={setIsAnnotationEraserActive}
         playerTemplates={playerTemplates}
         onApplyTemplateRoute={handleApplyTemplateRoute}
       />
@@ -214,6 +230,7 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
           onRoutesChange={handleRoutesChange}
           onAnnotationsChange={handleAnnotationsChange}
           onSelectPlayer={setSelectedPlayerId}
+          isAnnotationEraserActive={isAnnotationEraserActive}
         />
       </div>
     </div>

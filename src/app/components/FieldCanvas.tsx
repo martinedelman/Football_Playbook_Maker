@@ -19,6 +19,7 @@ interface FieldCanvasProps {
   onRoutesChange: (routes: PlayerRoute[]) => void;
   onAnnotationsChange: (annotations: AnnotationStroke[]) => void;
   onSelectPlayer: (playerId: string | null) => void;
+  isAnnotationEraserActive?: boolean;
 }
 
 const FIELD_WIDTH = 500;
@@ -55,6 +56,7 @@ export default function FieldCanvas({
   onRoutesChange,
   onAnnotationsChange,
   onSelectPlayer,
+  isAnnotationEraserActive = false,
 }: FieldCanvasProps) {
   const { showToast } = useFeedback();
   const svgRef = useRef<SVGSVGElement>(null);
@@ -255,14 +257,14 @@ export default function FieldCanvas({
 
   // Handle freehand annotation drawing
   const handleAnnotationPointerDown = (e: PointerEvent<SVGSVGElement>) => {
-    if (toolMode !== "pen") return;
+    if (toolMode !== "pen" || isAnnotationEraserActive) return;
     const point = screenToSVG(e.clientX, e.clientY);
     setIsDrawingAnnotation(true);
     setCurrentAnnotation([point]);
   };
 
   const handleAnnotationPointerMove = (e: PointerEvent<SVGSVGElement>) => {
-    if (!isDrawingAnnotation || toolMode !== "pen") return;
+    if (!isDrawingAnnotation || toolMode !== "pen" || isAnnotationEraserActive) return;
     const point = screenToSVG(e.clientX, e.clientY);
     setCurrentAnnotation([...currentAnnotation, point]);
   };
@@ -279,6 +281,12 @@ export default function FieldCanvas({
     }
     setIsDrawingAnnotation(false);
     setCurrentAnnotation([]);
+  };
+
+  const handleEraseAnnotation = (event: PointerEvent<SVGPathElement>, annotationId: string) => {
+    if (toolMode !== "pen" || !isAnnotationEraserActive) return;
+    event.stopPropagation();
+    onAnnotationsChange(annotations.filter((annotation) => annotation.id !== annotationId));
   };
 
   // Points to SVG path
@@ -420,7 +428,10 @@ export default function FieldCanvas({
         viewBox={`0 0 ${FIELD_WIDTH} ${FIELD_HEIGHT}`}
         preserveAspectRatio="xMidYMid meet"
         className="max-w-full max-h-full border-2 border-gray-300 rounded shadow-lg"
-        style={{ cursor: toolMode === "pen" ? "crosshair" : toolMode === "route" ? "pointer" : "default" }}
+        style={{
+          cursor:
+            toolMode === "pen" ? (isAnnotationEraserActive ? "pointer" : "crosshair") : toolMode === "route" ? "pointer" : "default",
+        }}
         onClick={handleCanvasClick}
         onDoubleClick={handleCanvasDoubleClick}
         onPointerDown={handleAnnotationPointerDown}
@@ -470,15 +481,17 @@ export default function FieldCanvas({
 
         {/* Annotations */}
         {annotations.map((stroke) => (
-          <path
-            key={stroke.id}
-            d={pointsToPath(stroke.points)}
-            stroke={stroke.color}
-            strokeWidth={stroke.width}
-            fill="none"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
+          <g key={stroke.id}>
+            <path
+              data-annotation-id={stroke.id}
+              d={pointsToPath(stroke.points)}
+              stroke={stroke.color}
+              strokeWidth={stroke.width}
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </g>
         ))}
 
         {/* Current annotation being drawn */}
@@ -651,6 +664,25 @@ export default function FieldCanvas({
             </g>
           );
         })}
+
+        {/* Wide invisible targets rendered on top make annotations easy to select with the eraser. */}
+        {toolMode === "pen" &&
+          isAnnotationEraserActive &&
+          annotations.map((stroke) => (
+            <path
+              key={`eraser-${stroke.id}`}
+              data-annotation-eraser-id={stroke.id}
+              d={pointsToPath(stroke.points)}
+              stroke="transparent"
+              strokeWidth={Math.max(12, stroke.width + 8)}
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              pointerEvents="stroke"
+              style={{ cursor: "pointer" }}
+              onPointerDown={(event) => handleEraseAnnotation(event, stroke.id)}
+            />
+          ))}
       </svg>
     </div>
   );

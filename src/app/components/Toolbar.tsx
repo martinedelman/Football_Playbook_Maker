@@ -18,6 +18,9 @@ interface ToolbarProps {
   onSaveFormation: (name: string) => void;
   onLoadFormation: (formationId: string) => void;
   onClearAnnotations: () => void;
+  onClearLastAnnotation: () => void;
+  isAnnotationEraserActive: boolean;
+  onAnnotationEraserChange: (active: boolean) => void;
   playerTemplates: PlayerTemplate[];
   onApplyTemplateRoute: (templateId: string, routeId: string) => void;
 }
@@ -35,6 +38,9 @@ export default function Toolbar({
   onSaveFormation,
   onLoadFormation,
   onClearAnnotations,
+  onClearLastAnnotation,
+  isAnnotationEraserActive,
+  onAnnotationEraserChange,
   playerTemplates,
   onApplyTemplateRoute,
 }: ToolbarProps) {
@@ -245,12 +251,31 @@ export default function Toolbar({
           <>
             <div className="h-8 w-px bg-gray-300"></div>
 
-            <button
-              onClick={onClearAnnotations}
-              className="px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700"
-            >
-              🗑️ Clear Annotations
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={onClearAnnotations}
+                className="px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700"
+              >
+                🗑️ Clear all annotations
+              </button>
+              <button
+                onClick={onClearLastAnnotation}
+                className="px-4 py-2 text-sm bg-amber-600 text-white rounded hover:bg-amber-700"
+              >
+                ↩️ Clear last annotation
+              </button>
+              <button
+                onClick={() => onAnnotationEraserChange(!isAnnotationEraserActive)}
+                className={`px-4 py-2 text-sm font-medium rounded ${
+                  isAnnotationEraserActive
+                    ? "bg-purple-600 text-white"
+                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                }`}
+                aria-pressed={isAnnotationEraserActive}
+              >
+                🧽 Rubber
+              </button>
+            </div>
           </>
         )}
       </div>
@@ -265,7 +290,10 @@ export default function Toolbar({
         {toolMode === "route" &&
           (!selectedPlayerId || matchingTemplates.length === 0) &&
           "• Click a player, then click to draw route points. Double-click to finish."}
-        {toolMode === "pen" && "• Click and drag to draw freehand annotations"}
+        {toolMode === "pen" &&
+          (isAnnotationEraserActive
+            ? "• Click an annotation to erase it"
+            : "• Click and drag to draw freehand annotations")}
       </div>
     </div>
   );
