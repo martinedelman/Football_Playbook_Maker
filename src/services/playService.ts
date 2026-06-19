@@ -51,6 +51,17 @@ export class PlayService {
     }
   }
 
+  async updatePlayDescription(id: string, description: string): Promise<Play> {
+    try {
+      const repo = Container.getPlayRepository();
+      const dto: UpdatePlayDTO = { description: description.trim() };
+      return await repo.update(id, dto);
+    } catch (error) {
+      console.error(`Error updating play description ${id}:`, error);
+      throw new Error("Failed to update play description");
+    }
+  }
+
   async updatePlayPlayers(id: string, players: PlayerState[]): Promise<Play> {
     try {
       const repo = Container.getPlayRepository();

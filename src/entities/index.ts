@@ -62,6 +62,7 @@ export interface Formation {
 export interface Play {
   id: string;
   name: string;
+  description?: string;
   side: PlaySide;
   formationId?: string;
   players: PlayerState[];
@@ -120,6 +121,7 @@ export interface CreateFormationDTO {
 
 export interface UpdatePlayDTO {
   name?: string;
+  description?: string;
   players?: PlayerState[];
   routes?: PlayerRoute[];
   annotations?: AnnotationStroke[];

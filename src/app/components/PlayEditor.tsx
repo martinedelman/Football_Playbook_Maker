@@ -18,6 +18,7 @@ import { formationService } from "@/services/formationService";
 import { playerTemplateService } from "@/services/playerTemplateService";
 import FieldCanvas from "./FieldCanvas";
 import Toolbar from "./Toolbar";
+import Modal from "./feedback/Modal";
 import { useFeedback } from "./feedback/ToastProvider";
 import { FeedbackStatus } from "./feedback/types";
 
@@ -35,6 +36,9 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
   const [isDirty, setIsDirty] = useState(false);
   const [isAnnotationEraserActive, setIsAnnotationEraserActive] = useState(false);
   const [annotationColor, setAnnotationColor] = useState("#000000");
+  const [isDescriptionOpen, setIsDescriptionOpen] = useState(false);
+  const [descriptionDraft, setDescriptionDraft] = useState(play.description ?? "");
+  const [isSavingDescription, setIsSavingDescription] = useState(false);
   const [pendingRouteStyles, setPendingRouteStyles] = useState<Record<string, RouteStyle>>({});
   const [selectedRouteSegments, setSelectedRouteSegments] = useState<
     Array<{ playerId: string; segmentIndex: number }>
@@ -63,7 +67,31 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
   useEffect(() => {
     setSelectedRouteSegments([]);
     setPendingRouteStyles({});
+    setDescriptionDraft("");
+    setIsDescriptionOpen(false);
   }, [play.id]);
+
+  const openDescriptionModal = () => {
+    setDescriptionDraft(play.description ?? "");
+    setIsDescriptionOpen(true);
+  };
+
+  const handleSaveDescription = async () => {
+    if (isSavingDescription) return;
+    setIsSavingDescription(true);
+    try {
+      const updated = await playService.updatePlayDescription(play.id, descriptionDraft);
+      onUpdate(updated);
+      setDescriptionDraft(updated.description ?? "");
+      setIsDescriptionOpen(false);
+      showToast({ status: FeedbackStatus.INFO, title: "Play description saved" });
+    } catch (error) {
+      console.error("Failed to update play description:", error);
+      showToast({ status: FeedbackStatus.ERROR, title: "Play description was not saved" });
+    } finally {
+      setIsSavingDescription(false);
+    }
+  };
 
   const handlePlayersChange = async (players: PlayerState[]) => {
     try {
@@ -244,9 +272,25 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-4 shadow-sm">
         <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-bold text-gray-800">{play.name}</h2>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h2 className="truncate text-xl font-bold text-gray-800">{play.name}</h2>
+              <button
+                type="button"
+                onClick={openDescriptionModal}
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-base transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  play.description
+                    ? "bg-blue-600 text-white hover:bg-blue-700"
+                    : "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                }`}
+                title="View or edit play description"
+                aria-label={`View or edit description for ${play.name}`}
+              >
+                ⓘ
+              </button>
+            </div>
             <p className="text-sm text-gray-500">{play.side === PlaySide.OFFENSE ? "Offensive" : "Defensive"} Play</p>
+            {play.description && <p className="mt-1 line-clamp-2 text-sm text-gray-600">{play.description}</p>}
           </div>
           {isDirty && <span className="text-sm text-orange-600">Unsaved changes</span>}
         </div>
@@ -298,6 +342,29 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
           onRouteSegmentToggle={handleRouteSegmentToggle}
         />
       </div>
+      <Modal
+        isOpen={isDescriptionOpen}
+        status={FeedbackStatus.INFO}
+        title="Play description"
+        confirmLabel="Save"
+        isLoading={isSavingDescription}
+        onConfirm={() => void handleSaveDescription()}
+        onClose={() => !isSavingDescription && setIsDescriptionOpen(false)}
+      >
+        <label htmlFor="play-description" className="mb-2 block font-medium text-gray-700">
+          Comments and instructions
+        </label>
+        <textarea
+          id="play-description"
+          value={descriptionDraft}
+          onChange={(event) => setDescriptionDraft(event.target.value)}
+          rows={7}
+          placeholder="Describe the objective, reads, timing, adjustments, or any other notes for this play..."
+          className="w-full resize-y rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+          autoFocus
+        />
+        <p className="mt-2 text-xs text-gray-500">Leave the field empty and save to remove the description.</p>
+      </Modal>
     </div>
   );
 }

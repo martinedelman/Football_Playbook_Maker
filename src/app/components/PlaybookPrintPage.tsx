@@ -285,6 +285,7 @@ export const buildPlaybookPrintHtml = (playbook: Playbook): string => {
   const playItems = playbook.plays.map((play) => ({
     id: play.id,
     name: escapeHtml(play.name),
+    description: escapeHtml(play.description ?? ""),
     side: play.side === PlaySide.OFFENSE ? "Offense" : "Defense",
     svg: buildPlaySvg(play),
   }));
@@ -300,6 +301,7 @@ export const buildPlaybookPrintHtml = (playbook: Playbook): string => {
                   <div class="play-card">
                     <div class="play-name">${play.name}</div>
                     <div class="play-side">${play.side}</div>
+                    ${play.description ? `<div class="play-description">${play.description}</div>` : ""}
                     ${play.svg}
                   </div>
                 `,
@@ -357,6 +359,7 @@ export const buildPlaybookPrintHtml = (playbook: Playbook): string => {
             .play-card { border: 1px dashed #9ca3af; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; text-align: center; }
             .play-name { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
             .play-side { font-size: 12px; text-transform: uppercase; color: #6b7280; }
+            .play-description { font-size: 11px; line-height: 1.35; color: #374151; text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; }
             .play-diagram { width: 100%; height: 100%; min-height: 160px; }
             .empty { font-style: italic; }
             @media print {
