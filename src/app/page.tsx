@@ -11,7 +11,8 @@ import PlayEditor from "@/app/components/PlayEditor";
 import PlayerTemplateEditor from "@/app/components/PlayerTemplateEditor";
 import WelcomeGuide from "@/app/components/WelcomeGuide";
 import ResizableSidebar from "@/app/components/ResizableSidebar";
-import { buildPlaybookPrintHtml } from "@/app/components/PlaybookPrintPage";
+import { buildPlaybookPrintHtml, type PlaybookPrintFormat } from "@/app/components/PlaybookPrintPage";
+import PrintOptionsModal from "@/app/components/PrintOptionsModal";
 import { useFeedback } from "@/app/components/feedback/ToastProvider";
 import { FeedbackStatus } from "@/app/components/feedback/types";
 
@@ -147,6 +148,7 @@ export default function Home() {
   const [playerTemplates, setPlayerTemplates] = useState<PlayerTemplate[]>([]);
   const [selectedPlayerTemplate, setSelectedPlayerTemplate] = useState<PlayerTemplate | null>(null);
   const [loading, setLoading] = useState(true);
+  const [playbookToPrint, setPlaybookToPrint] = useState<Playbook | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -219,8 +221,12 @@ export default function Home() {
     }
   };
 
-  const handlePrintPlaybook = (playbook: Playbook) => {
-    const html = buildPlaybookPrintHtml(playbook);
+  const handlePrintPlaybook = (
+    playbook: Playbook,
+    format: PlaybookPrintFormat,
+    bookPlaysPerPage: 1 | 2 | 4,
+  ) => {
+    const html = buildPlaybookPrintHtml(playbook, { format, bookPlaysPerPage });
     const blob = new Blob([html], { type: "text/html" });
     const url = URL.createObjectURL(blob);
     const printWindow = window.open(url, "_blank");
@@ -233,6 +239,7 @@ export default function Home() {
       });
       return;
     }
+    setPlaybookToPrint(null);
     setTimeout(() => URL.revokeObjectURL(url), 30000);
   };
 
@@ -454,7 +461,7 @@ export default function Home() {
           onRenamePlaybook={handleRenamePlaybook}
           onSelectPlaybook={handleSelectPlaybook}
           onDeletePlaybook={handleDeletePlaybook}
-          onPrintPlaybook={handlePrintPlaybook}
+          onPrintPlaybook={setPlaybookToPrint}
           onCreatePlay={handleCreatePlay}
           onRenamePlay={handleRenamePlay}
           onReorderPlays={handleReorderPlays}
@@ -476,6 +483,11 @@ export default function Home() {
           <WelcomeGuide />
         )}
       </main>
+      <PrintOptionsModal
+        playbook={playbookToPrint}
+        onClose={() => setPlaybookToPrint(null)}
+        onPrint={handlePrintPlaybook}
+      />
     </div>
   );
 }

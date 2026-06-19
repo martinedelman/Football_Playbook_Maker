@@ -262,70 +262,129 @@ const chunkArray = <T,>(items: T[], size: number): T[][] => {
   return chunks;
 };
 
-const getLayoutGrid = (perPage: number): { columns: number; rows: number } => {
-  switch (perPage) {
-    case 1:
-      return { columns: 1, rows: 1 };
-    case 2:
-      return { columns: 1, rows: 2 };
-    case 4:
-      return { columns: 2, rows: 2 };
-    case 8:
-      return { columns: 2, rows: 4 };
-    case 12:
-    default:
-      return { columns: 3, rows: 4 };
+export type PlaybookPrintFormat =
+  | "wristband-diagram"
+  | "wristband-list"
+  | "call-sheet-diagram"
+  | "call-sheet-list"
+  | "playbook"
+  | "scout-cards";
+
+interface PlaybookPrintOptions {
+  format: PlaybookPrintFormat;
+  bookPlaysPerPage?: 1 | 2 | 4;
+}
+
+interface PrintLayout {
+  label: string;
+  orientation: "portrait" | "landscape";
+  perPage: number;
+  columns: number;
+  rows: number;
+}
+
+const getPrintLayout = (options: PlaybookPrintOptions): PrintLayout => {
+  switch (options.format) {
+    case "wristband-diagram":
+      return { label: "Pulsera — Diagrama", orientation: "landscape", perPage: 6, columns: 3, rows: 2 };
+    case "wristband-list":
+      return { label: "Pulsera — Lista", orientation: "landscape", perPage: 18, columns: 3, rows: 6 };
+    case "call-sheet-diagram":
+      return { label: "Hoja de llamadas — Diagrama", orientation: "portrait", perPage: 8, columns: 2, rows: 4 };
+    case "call-sheet-list":
+      return { label: "Hoja de llamadas — Lista", orientation: "portrait", perPage: 30, columns: 2, rows: 15 };
+    case "playbook": {
+      const perPage = options.bookPlaysPerPage === 4 ? 4 : options.bookPlaysPerPage === 2 ? 2 : 1;
+      return {
+        label: "Libro de jugadas",
+        orientation: "portrait",
+        perPage,
+        columns: perPage === 4 ? 2 : 1,
+        rows: perPage === 4 ? 2 : perPage,
+      };
+    }
+    case "scout-cards":
+      return { label: "Tarjetas scout", orientation: "portrait", perPage: 4, columns: 2, rows: 2 };
   }
 };
 
-export const buildPlaybookPrintHtml = (playbook: Playbook): string => {
-  const layouts = [1, 2, 4, 8, 12];
-  const defaultLayout = 1;
-  const defaultOrientation = "portrait";
+const buildPlayCard = (
+  play: { name: string; description: string; side: string; svg: string },
+  format: PlaybookPrintFormat,
+  playNumber: number,
+): string => {
+  const meta = `
+    <div class="play-meta">
+      <span class="play-number">${playNumber}.</span>
+      <span class="play-name">${play.name}</span>
+      <span class="play-side">${play.side}</span>
+    </div>
+  `;
+
+  if (format === "wristband-list" || format === "call-sheet-list") {
+    return `<article class="play-card list-card">${meta}</article>`;
+  }
+
+  if (format === "playbook") {
+    return `
+      <article class="play-card book-card">
+        ${meta}
+        <div class="book-content">
+          <div class="diagram-wrap">${play.svg}</div>
+          <div class="play-description">
+            <div class="description-title">Descripción</div>
+            ${play.description || '<span class="description-empty">Sin descripción.</span>'}
+          </div>
+        </div>
+      </article>
+    `;
+  }
+
+  if (format === "scout-cards") {
+    return `
+      <article class="play-card scout-card">
+        ${meta}
+        <div class="diagram-wrap">${play.svg}</div>
+        <div class="scout-notes" aria-label="Scout notes">
+          <span></span><span></span><span></span>
+        </div>
+      </article>
+    `;
+  }
+
+  return `<article class="play-card diagram-card">${meta}<div class="diagram-wrap">${play.svg}</div></article>`;
+};
+
+export const buildPlaybookPrintHtml = (playbook: Playbook, options: PlaybookPrintOptions): string => {
+  const layout = getPrintLayout(options);
+  const sheetWidth = layout.orientation === "portrait" ? 200 : 287;
+  const sheetHeight = layout.orientation === "portrait" ? 287 : 200;
   const playItems = playbook.plays.map((play) => ({
-    id: play.id,
     name: escapeHtml(play.name),
     description: escapeHtml(play.description ?? ""),
     side: play.side === PlaySide.OFFENSE ? "Offense" : "Defense",
     svg: buildPlaySvg(play),
   }));
-
-  const sections = layouts
-    .map((perPage) => {
-      const { columns, rows } = getLayoutGrid(perPage);
-      const pages = chunkArray(playItems, perPage)
-        .map((pagePlays, pageIndex) => {
-          const cards = pagePlays
-            .map(
-              (play) => `
-                  <div class="play-card">
-                    <div class="play-name">${play.name}</div>
-                    <div class="play-side">${play.side}</div>
-                    ${play.description ? `<div class="play-description">${play.description}</div>` : ""}
-                    ${play.svg}
-                  </div>
-                `,
-            )
-            .join("");
-
-          return `
-              <div class="print-page">
-                <div class="page-header">${perPage} jugada${perPage === 1 ? "" : "s"} por hoja - Pagina ${
-                  pageIndex + 1
-                }</div>
-                <div class="play-grid" style="grid-template-columns: repeat(${columns}, 1fr); grid-template-rows: repeat(${rows}, 1fr);">
-                  ${cards}
-                </div>
-              </div>
-            `;
-        })
+  const pages = (playItems.length > 0 ? chunkArray(playItems, layout.perPage) : [[]])
+    .map((pagePlays, pageIndex) => {
+      const firstPlayNumber = pageIndex * layout.perPage;
+      const cards = pagePlays
+        .map((play, index) => buildPlayCard(play, options.format, firstPlayNumber + index + 1))
         .join("");
 
       return `
-          <section class="layout-section layout-${perPage}" data-layout="${perPage}">
-            ${pages || '<p class="empty">No hay jugadas en este playbook.</p>'}
-          </section>
-        `;
+        <section class="sheet">
+          <header class="sheet-header">
+            <strong>${escapeHtml(playbook.name)}</strong>
+            <span>${layout.label} · Página ${pageIndex + 1}</span>
+          </header>
+          ${
+            cards
+              ? `<div class="play-grid" style="grid-template-columns: repeat(${layout.columns}, minmax(0, 1fr)); grid-template-rows: repeat(${layout.rows}, minmax(0, 1fr));">${cards}</div>`
+              : '<div class="empty">No hay jugadas en este playbook.</div>'
+          }
+        </section>
+      `;
     })
     .join("");
 
@@ -335,92 +394,57 @@ export const buildPlaybookPrintHtml = (playbook: Playbook): string => {
         <head>
           <meta charset="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <title>Imprimir Playbook</title>
+          <title>${escapeHtml(playbook.name)} — ${layout.label}</title>
           <style>
             * { box-sizing: border-box; }
-            body { font-family: Arial, sans-serif; margin: 0; padding: 8px; color: #111827; }
-            h1 { font-size: 24px; margin-bottom: 8px; }
-            h2 { font-size: 18px; margin: 32px 0 12px; }
-            p { margin: 0 0 12px; color: #4b5563; }
-            .example-list { margin: 12px 0 20px; padding-left: 18px; color: #374151; }
-            .toolbar { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; align-items: center; }
-            .button { background: #111827; color: #fff; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; }
-            .control { display: flex; align-items: center; gap: 6px; font-size: 14px; color: #374151; }
-            select { border: 1px solid #d1d5db; border-radius: 6px; padding: 6px 10px; }
-            .layout-section { page-break-after: always; display: none; }
-            body[data-layout="1"] .layout-1,
-            body[data-layout="2"] .layout-2,
-            body[data-layout="4"] .layout-4,
-            body[data-layout="8"] .layout-8,
-            body[data-layout="12"] .layout-12 { display: block; }
-            .print-page { border: 1px solid #e5e7eb; padding: 12px; margin-bottom: 16px; break-inside: avoid; }
-            .page-header { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: #6b7280; margin-bottom: 8px; }
-            .play-grid { display: grid; gap: 12px; min-height: 520px; }
-            .play-card { border: 1px dashed #9ca3af; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; text-align: center; }
-            .play-name { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
-            .play-side { font-size: 12px; text-transform: uppercase; color: #6b7280; }
-            .play-description { font-size: 11px; line-height: 1.35; color: #374151; text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; }
-            .play-diagram { width: 100%; height: 100%; min-height: 160px; }
-            .empty { font-style: italic; }
+            :root { --sheet-width: ${sheetWidth}mm; --sheet-height: ${sheetHeight}mm; }
+            html, body { margin: 0; min-height: 100%; }
+            body { background: #e5e7eb; color: #111827; font-family: Arial, sans-serif; }
+            .toolbar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #fff; box-shadow: 0 1px 6px #0002; }
+            .toolbar-title { margin-right: auto; font-size: 14px; color: #374151; }
+            .button { border: 0; border-radius: 6px; padding: 8px 14px; background: #111827; color: #fff; font-weight: 600; cursor: pointer; }
+            .button-secondary { background: #e5e7eb; color: #1f2937; }
+            .sheet { width: var(--sheet-width); height: var(--sheet-height); margin: 12px auto; padding: 2mm; overflow: hidden; background: #fff; break-after: page; box-shadow: 0 2px 12px #0003; }
+            .sheet:last-child { break-after: auto; }
+            .sheet-header { display: flex; height: 7mm; align-items: center; justify-content: space-between; gap: 4mm; border-bottom: 0.3mm solid #111827; font-size: 3mm; }
+            .sheet-header span { color: #4b5563; font-size: 2.6mm; }
+            .play-grid { display: grid; height: calc(100% - 7mm); min-height: 0; gap: 1.5mm; padding-top: 1.5mm; }
+            .play-card { min-width: 0; min-height: 0; overflow: hidden; border: 0.3mm solid #9ca3af; border-radius: 1.5mm; background: #fff; }
+            .play-meta { display: flex; min-height: 6mm; align-items: center; gap: 1.5mm; padding: 1mm 1.5mm; border-bottom: 0.2mm solid #d1d5db; }
+            .play-number { color: #6b7280; font-size: 2.5mm; }
+            .play-name { min-width: 0; overflow: hidden; font-size: 3mm; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+            .play-side { margin-left: auto; color: #6b7280; font-size: 2.1mm; text-transform: uppercase; }
+            .diagram-card, .scout-card, .book-card { display: flex; flex-direction: column; }
+            .diagram-wrap { min-height: 0; flex: 1; padding: 1mm; }
+            .play-diagram { display: block; width: 100%; height: 100%; }
+            .list-card { display: flex; align-items: stretch; }
+            .list-card .play-meta { width: 100%; min-height: 0; border: 0; padding: 0.7mm 1.5mm; }
+            .list-card .play-name { font-size: 2.8mm; }
+            .book-content { display: grid; min-height: 0; flex: 1; grid-template-columns: minmax(0, 58%) minmax(0, 42%); }
+            .book-content .diagram-wrap { border-right: 0.2mm solid #d1d5db; }
+            .play-description { overflow: hidden; padding: 3mm; color: #374151; font-size: 3mm; line-height: 1.35; overflow-wrap: anywhere; white-space: pre-wrap; }
+            .description-title { margin-bottom: 2mm; color: #111827; font-size: 3.3mm; font-weight: 700; }
+            .description-empty { color: #9ca3af; font-style: italic; }
+            .scout-notes { display: grid; gap: 2mm; padding: 0 2mm 2mm; }
+            .scout-notes span { display: block; height: 0; border-top: 0.2mm solid #d1d5db; }
+            .empty { display: grid; height: calc(100% - 7mm); place-items: center; color: #6b7280; font-style: italic; }
             @media print {
-              .toolbar, .no-print { display: none !important; }
-              body { margin: 0; padding: 0; }
-              .layout-section { page-break-after: always; }
+              .toolbar { display: none !important; }
+              body { background: #fff; }
+              .sheet { margin: 0; box-shadow: none; }
             }
           </style>
           <style id="page-style">
-            @page { size: A4 portrait; margin: 0; }
+            @page { size: A4 ${layout.orientation}; margin: 5mm; }
           </style>
         </head>
-        <body data-layout="${defaultLayout}" data-orientation="${defaultOrientation}">
-          <h1 class="no-print">${escapeHtml(playbook.name)}</h1>
-          <p class="no-print">Ejemplos de como imprimir este playbook:</p>
-          <ul class="example-list no-print">
-            <li>1 jugada por hoja</li>
-            <li>2 jugadas por hoja</li>
-            <li>4 jugadas por hoja</li>
-            <li>8 jugadas por hoja</li>
-            <li>12 jugadas por hoja</li>
-          </ul>
-          <div class="toolbar no-print">
+        <body>
+          <div class="toolbar">
+            <span class="toolbar-title">${escapeHtml(playbook.name)} · ${layout.label} · A4 ${layout.orientation === "portrait" ? "vertical" : "horizontal"}</span>
+            <button class="button button-secondary" onclick="window.close()">Cerrar</button>
             <button class="button" onclick="window.print()">Imprimir</button>
-            <label class="control" for="layout-select">Jugadas por hoja</label>
-            <select id="layout-select">
-              <option value="1">1</option>
-              <option value="2">2</option>
-              <option value="4">4</option>
-              <option value="8">8</option>
-              <option value="12">12</option>
-            </select>
-            <label class="control" for="orientation-select">Orientacion</label>
-            <select id="orientation-select">
-              <option value="portrait">Vertical</option>
-              <option value="landscape">Horizontal</option>
-            </select>
           </div>
-          ${sections}
-          <script>
-            const layoutSelect = document.getElementById("layout-select");
-            const orientationSelect = document.getElementById("orientation-select");
-            const pageStyle = document.getElementById("page-style");
-
-            const applyLayout = (value) => {
-              document.body.dataset.layout = value;
-            };
-
-            const applyOrientation = (value) => {
-              document.body.dataset.orientation = value;
-              pageStyle.textContent = "@page { size: letter " + value + "; margin: 0.5in; }";
-            };
-
-            layoutSelect.value = "${defaultLayout}";
-            orientationSelect.value = "${defaultOrientation}";
-            applyLayout(layoutSelect.value);
-            applyOrientation(orientationSelect.value);
-
-            layoutSelect.addEventListener("change", (event) => applyLayout(event.target.value));
-            orientationSelect.addEventListener("change", (event) => applyOrientation(event.target.value));
-          </script>
+          ${pages}
         </body>
       </html>
     `;
