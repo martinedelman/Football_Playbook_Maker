@@ -32,14 +32,19 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
   const { showToast } = useFeedback();
   const [toolMode, setToolMode] = useState<ToolMode>("select");
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
-  const [routeStyle, setRouteStyle] = useState<RouteStyle>(play.routeStyle || RouteStyle.STRAIGHT);
   const [isDirty, setIsDirty] = useState(false);
   const [isAnnotationEraserActive, setIsAnnotationEraserActive] = useState(false);
   const [annotationColor, setAnnotationColor] = useState("#000000");
+  const [pendingRouteStyles, setPendingRouteStyles] = useState<Record<string, RouteStyle>>({});
   const [selectedRouteSegments, setSelectedRouteSegments] = useState<
     Array<{ playerId: string; segmentIndex: number }>
   >([]);
   const [playerTemplates, setPlayerTemplates] = useState<PlayerTemplate[]>([]);
+  const legacyRouteStyle = play.routeStyle || RouteStyle.STRAIGHT;
+  const selectedRoute = play.routes.find((route) => route.playerId === selectedPlayerId);
+  const selectedRouteStyle = selectedPlayerId
+    ? pendingRouteStyles[selectedPlayerId] ?? selectedRoute?.routeStyle ?? legacyRouteStyle
+    : legacyRouteStyle;
 
   const loadPlayerTemplates = useCallback(async () => {
     try {
@@ -55,11 +60,10 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
     void loadPlayerTemplates();
   }, [loadPlayerTemplates]);
 
-  // Sync routeStyle when play changes
   useEffect(() => {
-    setRouteStyle(play.routeStyle || RouteStyle.STRAIGHT);
     setSelectedRouteSegments([]);
-  }, [play.id, play.routeStyle]);
+    setPendingRouteStyles({});
+  }, [play.id]);
 
   const handlePlayersChange = async (players: PlayerState[]) => {
     try {
@@ -118,6 +122,7 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
   };
 
   const handleRouteSegmentToggle = (playerId: string, segmentIndex: number) => {
+    setSelectedPlayerId(playerId);
     setSelectedRouteSegments((current) => {
       const isSelected = current.some(
         (selection) => selection.playerId === playerId && selection.segmentIndex === segmentIndex,
@@ -154,15 +159,15 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
     await handleRoutesChange(updatedRoutes);
   };
 
-  const handleRouteStyleChange = async (newRouteStyle: RouteStyle) => {
-    setRouteStyle(newRouteStyle);
-    try {
-      const updated = await playService.updatePlayRouteStyle(play.id, newRouteStyle);
-      onUpdate(updated);
-    } catch (error) {
-      console.error("Failed to update route style:", error);
-      showToast({ status: FeedbackStatus.ERROR, title: "Route style was not saved" });
-    }
+  const handleRouteStyleChange = async (routeStyle: RouteStyle) => {
+    if (!selectedPlayerId) return;
+    setPendingRouteStyles((current) => ({ ...current, [selectedPlayerId]: routeStyle }));
+
+    if (!selectedRoute) return;
+    const updatedRoutes = play.routes.map((route) =>
+      route.playerId === selectedPlayerId ? { ...route, routeStyle } : route,
+    );
+    await handleRoutesChange(updatedRoutes);
   };
 
   const handleSaveFormation = async (name: string) => {
@@ -226,6 +231,7 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
     const newRoute: PlayerRoute = {
       playerId: selectedPlayerId,
       points: adjustedPoints,
+      routeStyle: selectedRouteStyle,
     };
 
     await handleRoutesChange([...existingRoutes, newRoute]);
@@ -250,7 +256,7 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
       <Toolbar
         toolMode={toolMode}
         onToolModeChange={handleToolModeChange}
-        routeStyle={routeStyle}
+        routeStyle={selectedRouteStyle}
         onRouteStyleChange={handleRouteStyleChange}
         selectedRouteSegmentCount={selectedRouteSegments.length}
         onRouteSegmentStyleChange={handleRouteSegmentStyleChange}
@@ -278,7 +284,8 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
           routes={play.routes}
           annotations={play.annotations}
           toolMode={toolMode}
-          routeStyle={routeStyle}
+          routeStyle={legacyRouteStyle}
+          drawingRouteStyle={selectedRouteStyle}
           selectedPlayerId={selectedPlayerId}
           playSide={play.side}
           onPlayersChange={handlePlayersChange}

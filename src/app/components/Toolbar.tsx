@@ -116,11 +116,10 @@ export default function Toolbar({
           </button>
         </div>
 
-        {/* Route style selection - only in route mode */}
-        {toolMode === "route" && (
+        {/* Route geometry applies to the selected player's complete route. */}
+        {toolMode === "route" && selectedPlayerId && (
           <>
             <div className="h-8 w-px bg-gray-300"></div>
-
             <div className="flex gap-2">
               <button
                 onClick={() => onRouteStyleChange(RouteStyle.STRAIGHT)}
@@ -146,7 +145,7 @@ export default function Toolbar({
           </>
         )}
 
-        {/* Line style applies only to the route segments selected on the field. */}
+        {/* Line style applies only to selected route segments. */}
         {toolMode === "route" && selectedRouteSegmentCount > 0 && (
           <>
             <div className="h-8 w-px bg-gray-300"></div>

@@ -33,37 +33,6 @@ const pointsToPath = (points: Point[]): string => {
   return `${start} ${lines}`;
 };
 
-const pointsToSmoothPath = (points: Point[]): string => {
-  if (points.length === 0) return "";
-  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
-  if (points.length === 2) return `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`;
-
-  let path = `M ${points[0].x} ${points[0].y}`;
-
-  for (let index = 0; index < points.length - 1; index += 1) {
-    const current = points[index];
-    const next = points[index + 1];
-
-    if (index === 0) {
-      const midX = (current.x + next.x) / 2;
-      const midY = (current.y + next.y) / 2;
-      path += ` Q ${current.x} ${current.y} ${midX} ${midY}`;
-      continue;
-    }
-
-    if (index === points.length - 2) {
-      path += ` Q ${current.x} ${current.y} ${next.x} ${next.y}`;
-      continue;
-    }
-
-    const midX = (current.x + next.x) / 2;
-    const midY = (current.y + next.y) / 2;
-    path += ` Q ${current.x} ${current.y} ${midX} ${midY}`;
-  }
-
-  return path;
-};
-
 const midpoint = (first: Point, second: Point): Point => ({
   x: (first.x + second.x) / 2,
   y: (first.y + second.y) / 2,
@@ -99,12 +68,12 @@ const getRouteSegmentPath = (
   points: Point[],
   segmentIndex: number,
   segmentStyle: RouteSegmentStyle,
-  routeStyle: RouteStyle,
+  routeGeometry: RouteStyle,
 ): string => {
   const from = points[segmentIndex];
   const to = points[segmentIndex + 1];
   if (!from || !to) return "";
-  const usesCurvedGeometry = routeStyle === RouteStyle.CURVED && points.length > 2;
+  const usesCurvedGeometry = routeGeometry === RouteStyle.CURVED && points.length > 2;
   if (!usesCurvedGeometry) {
     return segmentStyle === RouteSegmentStyle.CORRUGATED
       ? createCorrugatedPath(from, to)
@@ -115,14 +84,7 @@ const getRouteSegmentPath = (
   const isLast = segmentIndex === points.length - 2;
   const visualStart = isFirst ? from : midpoint(points[segmentIndex - 1], from);
   const visualEnd = isLast ? to : midpoint(from, to);
-  if (segmentStyle === RouteSegmentStyle.CORRUGATED) {
-    return createCorrugatedPath(visualStart, visualEnd);
-  }
-
-  if (isFirst) {
-    return `M ${visualStart.x} ${visualStart.y} Q ${from.x} ${from.y} ${visualEnd.x} ${visualEnd.y}`;
-  }
-
+  if (segmentStyle === RouteSegmentStyle.CORRUGATED) return createCorrugatedPath(visualStart, visualEnd);
   return `M ${visualStart.x} ${visualStart.y} Q ${from.x} ${from.y} ${visualEnd.x} ${visualEnd.y}`;
 };
 
@@ -219,10 +181,11 @@ const buildPlaySvg = (play: Play): string => {
       };
       const allPoints = [startPoint, ...route.points];
       const routeColor = player.color || DEFAULT_ROUTE_COLOR;
+      const routeGeometry = route.routeStyle ?? routeStyle;
       const routeSegments = route.points
         .map((_, segmentIndex) => {
           const segmentStyle = getRouteSegmentStyle(route, segmentIndex);
-          const segmentPath = getRouteSegmentPath(allPoints, segmentIndex, segmentStyle, routeStyle);
+          const segmentPath = getRouteSegmentPath(allPoints, segmentIndex, segmentStyle, routeGeometry);
           return `<path
             d="${segmentPath}"
             stroke="${escapeHtml(routeColor)}"
@@ -236,7 +199,7 @@ const buildPlaySvg = (play: Play): string => {
         .join("");
       const arrow =
         allPoints.length >= 2
-          ? routeStyle === RouteStyle.CURVED
+          ? routeGeometry === RouteStyle.CURVED
             ? createArrowHeadOnly(allPoints[allPoints.length - 2], allPoints[allPoints.length - 1])
             : createArrowPath(allPoints[allPoints.length - 2], allPoints[allPoints.length - 1])
           : "";
@@ -253,7 +216,7 @@ const buildPlaySvg = (play: Play): string => {
               ? `<path d="${arrow}" stroke="${escapeHtml(routeColor)}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />`
               : ""
           }
-          ${routeStyle === RouteStyle.CURVED ? "" : routePoints}
+          ${routeGeometry === RouteStyle.CURVED ? "" : routePoints}
         </g>
       `;
     })

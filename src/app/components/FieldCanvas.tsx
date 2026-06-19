@@ -22,6 +22,7 @@ interface FieldCanvasProps {
   annotations: AnnotationStroke[];
   toolMode: ToolMode;
   routeStyle: RouteStyle;
+  drawingRouteStyle?: RouteStyle;
   selectedPlayerId: string | null;
   playSide: PlaySide;
   onPlayersChange: (players: PlayerState[]) => void;
@@ -62,6 +63,7 @@ export default function FieldCanvas({
   annotations,
   toolMode,
   routeStyle,
+  drawingRouteStyle = routeStyle,
   selectedPlayerId,
   playSide,
   onPlayersChange,
@@ -193,6 +195,7 @@ export default function FieldCanvas({
       const newRoute: PlayerRoute = {
         playerId: selectedPlayerId,
         points: cleanedPoints,
+        routeStyle: drawingRouteStyle,
       };
 
       // Replace existing route for this player or add new
@@ -231,6 +234,7 @@ export default function FieldCanvas({
         const newRoute: PlayerRoute = {
           playerId: playerId,
           points: cleanedPoints,
+          routeStyle: drawingRouteStyle,
         };
 
         // Replace existing route for this player or add new
@@ -315,36 +319,25 @@ export default function FieldCanvas({
     return `${start} ${lines}`;
   };
 
-  // Points to smooth SVG path using quadratic Bezier curves
   const pointsToSmoothPath = (points: Point[]): string => {
     if (points.length === 0) return "";
     if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
-    if (points.length === 2) return `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`;
+    if (points.length === 2) return pointsToPath(points);
 
     let path = `M ${points[0].x} ${points[0].y}`;
-
-    // For smooth curves, we'll use quadratic bezier curves (Q command)
-    // Each point becomes a control point, and we draw to the midpoint between consecutive points
-    for (let i = 0; i < points.length - 1; i++) {
-      const current = points[i];
-      const next = points[i + 1];
-
-      if (i === 0) {
-        // First segment: draw a curve from start to midpoint using next point as control
-        const midX = (current.x + next.x) / 2;
-        const midY = (current.y + next.y) / 2;
-        path += ` Q ${current.x} ${current.y} ${midX} ${midY}`;
-      } else if (i === points.length - 2) {
-        // Last segment: draw from previous midpoint to end using current point as control
+    for (let index = 0; index < points.length - 1; index += 1) {
+      const current = points[index];
+      const next = points[index + 1];
+      if (index === 0) {
+        const end = midpoint(current, next);
+        path += ` Q ${current.x} ${current.y} ${end.x} ${end.y}`;
+      } else if (index === points.length - 2) {
         path += ` Q ${current.x} ${current.y} ${next.x} ${next.y}`;
       } else {
-        // Middle segments: draw from previous midpoint to next midpoint using current point as control
-        const midX = (current.x + next.x) / 2;
-        const midY = (current.y + next.y) / 2;
-        path += ` Q ${current.x} ${current.y} ${midX} ${midY}`;
+        const end = midpoint(current, next);
+        path += ` Q ${current.x} ${current.y} ${end.x} ${end.y}`;
       }
     }
-
     return path;
   };
 
@@ -378,11 +371,12 @@ export default function FieldCanvas({
     points: Point[],
     segmentIndex: number,
     segmentStyle: RouteSegmentStyle,
+    routeGeometry: RouteStyle,
   ): string => {
     const from = points[segmentIndex];
     const to = points[segmentIndex + 1];
     if (!from || !to) return "";
-    const usesCurvedGeometry = routeStyle === RouteStyle.CURVED && points.length > 2;
+    const usesCurvedGeometry = routeGeometry === RouteStyle.CURVED && points.length > 2;
     if (!usesCurvedGeometry) {
       return segmentStyle === RouteSegmentStyle.CORRUGATED
         ? createCorrugatedPath(from, to)
@@ -393,20 +387,15 @@ export default function FieldCanvas({
     const isLast = segmentIndex === points.length - 2;
     const visualStart = isFirst ? from : midpoint(points[segmentIndex - 1], from);
     const visualEnd = isLast ? to : midpoint(from, to);
-    if (segmentStyle === RouteSegmentStyle.CORRUGATED) {
-      return createCorrugatedPath(visualStart, visualEnd);
-    }
-
-    if (isFirst) {
-      return `M ${visualStart.x} ${visualStart.y} Q ${from.x} ${from.y} ${visualEnd.x} ${visualEnd.y}`;
-    }
-
+    if (segmentStyle === RouteSegmentStyle.CORRUGATED) return createCorrugatedPath(visualStart, visualEnd);
     return `M ${visualStart.x} ${visualStart.y} Q ${from.x} ${from.y} ${visualEnd.x} ${visualEnd.y}`;
   };
 
   const getRouteSegmentStyle = (route: PlayerRoute, segmentIndex: number): RouteSegmentStyle =>
     route.segmentStyles?.[segmentIndex] ??
     (route.type === RouteType.DASHED ? RouteSegmentStyle.DASHED : RouteSegmentStyle.SOLID);
+
+  const getRouteGeometry = (route: PlayerRoute): RouteStyle => route.routeStyle ?? routeStyle;
 
   const pointsEqual = (a: Point, b: Point, epsilon = 0.5): boolean => {
     return Math.abs(a.x - b.x) < epsilon && Math.abs(a.y - b.y) < epsilon;
@@ -602,7 +591,8 @@ export default function FieldCanvas({
             <g key={`route-${route.playerId}-${routeIdx}`}>
               {route.points.map((_, segmentIndex) => {
                 const segmentStyle = getRouteSegmentStyle(route, segmentIndex);
-                const segmentPath = getRouteSegmentPath(allPoints, segmentIndex, segmentStyle);
+                const routeGeometry = getRouteGeometry(route);
+                const segmentPath = getRouteSegmentPath(allPoints, segmentIndex, segmentStyle, routeGeometry);
                 const isSelected = selectedRouteSegments.some(
                   (selection) =>
                     selection.playerId === route.playerId && selection.segmentIndex === segmentIndex,
@@ -645,7 +635,7 @@ export default function FieldCanvas({
                 />
               )}
               {/* Route points (exclude last point so arrow is clean) */}
-              {routeStyle != RouteStyle.CURVED
+              {getRouteGeometry(route) !== RouteStyle.CURVED
                 ? route.points
                     .slice(0, -1)
                     .map((point, idx) => (
@@ -682,7 +672,11 @@ export default function FieldCanvas({
               return (
                 <>
                   <path
-                    d={routeStyle === RouteStyle.CURVED ? pointsToSmoothPath(allPoints) : pointsToPath(allPoints)}
+                    d={
+                      drawingRouteStyle === RouteStyle.CURVED
+                        ? pointsToSmoothPath(allPoints)
+                        : pointsToPath(allPoints)
+                    }
                     stroke={routeColor}
                     strokeWidth={2}
                     fill="none"
@@ -690,7 +684,7 @@ export default function FieldCanvas({
                   {allPoints.length >= 2 && (
                     <path
                       d={
-                        routeStyle === RouteStyle.CURVED
+                        drawingRouteStyle === RouteStyle.CURVED
                           ? createArrowHeadOnly(allPoints[allPoints.length - 2], allPoints[allPoints.length - 1])
                           : createArrowPath(allPoints[allPoints.length - 2], allPoints[allPoints.length - 1])
                       }
@@ -782,11 +776,12 @@ export default function FieldCanvas({
 
             return route.points.map((_, segmentIndex) => {
               const segmentStyle = getRouteSegmentStyle(route, segmentIndex);
+              const routeGeometry = getRouteGeometry(route);
               return (
                 <path
                   key={`route-selector-${route.playerId}-${segmentIndex}`}
                   data-route-segment-selector={`${route.playerId}:${segmentIndex}`}
-                  d={getRouteSegmentPath(allPoints, segmentIndex, segmentStyle)}
+                  d={getRouteSegmentPath(allPoints, segmentIndex, segmentStyle, routeGeometry)}
                   stroke="transparent"
                   strokeWidth={14}
                   fill="none"

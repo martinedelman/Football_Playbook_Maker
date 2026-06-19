@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState, useEffect } from "react";
-import { Playbook, Play, PlaySide, PlayerTemplate, PlayerRoute, PlayerState } from "@/entities";
+import { Playbook, Play, PlaySide, PlayerTemplate, PlayerRoute, PlayerState, RouteStyle } from "@/entities";
 import { playbookService } from "@/services/playbookService";
 import { playService } from "@/services/playService";
 import { formationService } from "@/services/formationService";
@@ -90,6 +90,7 @@ const getTemplateRoutePoints = (
   return {
     playerId: player.playerId,
     points: adjustedPoints,
+    routeStyle: RouteStyle.STRAIGHT,
   };
 };
 

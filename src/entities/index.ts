@@ -40,6 +40,7 @@ export interface PlayerRoute {
   points: Point[];
   type?: RouteType;
   segmentStyles?: RouteSegmentStyle[];
+  routeStyle?: RouteStyle;
 }
 
 export interface AnnotationStroke {
