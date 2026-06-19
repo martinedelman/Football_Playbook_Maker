@@ -5,6 +5,8 @@ import { PlayerTemplate, PlayerState, PlayerRoute, NamedRoute, Point, PlaySide, 
 import { playerTemplateService } from "@/services/playerTemplateService";
 import FieldCanvas from "./FieldCanvas";
 import { ToolMode } from "./PlayEditor";
+import { useFeedback } from "./feedback/ToastProvider";
+import { FeedbackStatus } from "./feedback/types";
 
 const FIELD_WIDTH = 500;
 const FIELD_HEIGHT = 300;
@@ -15,6 +17,7 @@ interface PlayerTemplateEditorProps {
 }
 
 export default function PlayerTemplateEditor({ template, onUpdate }: PlayerTemplateEditorProps) {
+  const { showToast } = useFeedback();
   const [toolMode, setToolMode] = useState<ToolMode>("select");
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [routeStyle, setRouteStyle] = useState<RouteStyle>(RouteStyle.STRAIGHT);
@@ -51,6 +54,7 @@ export default function PlayerTemplateEditor({ template, onUpdate }: PlayerTempl
         onUpdate(updated);
       } catch (error) {
         console.error("Failed to update player template:", error);
+        showToast({ status: FeedbackStatus.ERROR, title: "Player template changes were not saved" });
       }
     }
   };
@@ -64,12 +68,12 @@ export default function PlayerTemplateEditor({ template, onUpdate }: PlayerTempl
 
   const handleSaveRoute = async () => {
     if (!currentRouteName.trim()) {
-      alert("Please enter a route name");
+      showToast({ status: FeedbackStatus.WARNING, title: "Route name is required" });
       return;
     }
 
     if (!routeBeingDrawn || routeBeingDrawn.points.length === 0) {
-      alert("Please draw a route first");
+      showToast({ status: FeedbackStatus.WARNING, title: "Draw a route before saving" });
       return;
     }
 
@@ -87,9 +91,10 @@ export default function PlayerTemplateEditor({ template, onUpdate }: PlayerTempl
       // Reset
       setCurrentRouteName("");
       setRouteBeingDrawn(null);
+      showToast({ status: FeedbackStatus.INFO, title: "Route saved", message: newRoute.name });
     } catch (error) {
       console.error("Failed to save route:", error);
-      alert("Error saving route");
+      showToast({ status: FeedbackStatus.ERROR, title: "Route was not saved" });
     }
   };
 
@@ -100,7 +105,7 @@ export default function PlayerTemplateEditor({ template, onUpdate }: PlayerTempl
       onUpdate(updated);
     } catch (error) {
       console.error("Failed to delete route:", error);
-      alert("Error deleting route");
+      showToast({ status: FeedbackStatus.ERROR, title: "Route was not deleted" });
     }
   };
 
@@ -124,6 +129,7 @@ export default function PlayerTemplateEditor({ template, onUpdate }: PlayerTempl
       setEditingRouteName("");
     } catch (error) {
       console.error("Failed to update route name:", error);
+      showToast({ status: FeedbackStatus.ERROR, title: "Route name was not saved" });
     }
   };
 
@@ -137,6 +143,7 @@ export default function PlayerTemplateEditor({ template, onUpdate }: PlayerTempl
       onUpdate(updated);
     } catch (error) {
       console.error("Failed to update player color:", error);
+      showToast({ status: FeedbackStatus.ERROR, title: "Player color was not saved" });
     }
   };
 

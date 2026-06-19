@@ -4,6 +4,8 @@ import { useState, useRef, useEffect, MouseEvent, PointerEvent } from "react";
 import { PlayerState, PlayerRoute, AnnotationStroke, Point, PlaySide, RouteStyle } from "@/entities";
 import { ToolMode } from "./PlayEditor";
 import { generateUUID } from "@/utils/uuid";
+import { useFeedback } from "./feedback/ToastProvider";
+import { FeedbackStatus } from "./feedback/types";
 
 interface FieldCanvasProps {
   players: PlayerState[];
@@ -54,6 +56,7 @@ export default function FieldCanvas({
   onAnnotationsChange,
   onSelectPlayer,
 }: FieldCanvasProps) {
+  const { showToast } = useFeedback();
   const svgRef = useRef<SVGSVGElement>(null);
   const [draggedPlayer, setDraggedPlayer] = useState<string | null>(null);
   const [currentRoute, setCurrentRoute] = useState<Point[]>([]);
@@ -132,7 +135,11 @@ export default function FieldCanvas({
 
     if (toolMode === "route") {
       if (!selectedPlayerId) {
-        alert("Please select a player first (click on a player token)");
+        showToast({
+          status: FeedbackStatus.WARNING,
+          title: "Select a player first",
+          message: "Click a player token before drawing a route.",
+        });
         return;
       }
 

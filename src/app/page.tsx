@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { Playbook, Play, PlaySide, PlayerTemplate, PlayerRoute, PlayerState } from "@/entities";
 import { playbookService } from "@/services/playbookService";
 import { playService } from "@/services/playService";
@@ -11,6 +11,8 @@ import PlayEditor from "@/app/components/PlayEditor";
 import PlayerTemplateEditor from "@/app/components/PlayerTemplateEditor";
 import WelcomeGuide from "@/app/components/WelcomeGuide";
 import { buildPlaybookPrintHtml } from "@/app/components/PlaybookPrintPage";
+import { useFeedback } from "@/app/components/feedback/ToastProvider";
+import { FeedbackStatus } from "@/app/components/feedback/types";
 
 type AutoPlayPattern = {
   formationName: string;
@@ -136,6 +138,7 @@ const buildRoutesFromPattern = (
 };
 
 export default function Home() {
+  const { showToast, showCriticalError } = useFeedback();
   const [playbooks, setPlaybooks] = useState<Playbook[]>([]);
   const [selectedPlaybook, setSelectedPlaybook] = useState<Playbook | null>(null);
   const [selectedPlay, setSelectedPlay] = useState<Play | null>(null);
@@ -143,11 +146,7 @@ export default function Home() {
   const [selectedPlayerTemplate, setSelectedPlayerTemplate] = useState<PlayerTemplate | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const [playbooksData, templatesData] = await Promise.all([
@@ -158,19 +157,27 @@ export default function Home() {
       setPlayerTemplates(templatesData);
     } catch (error) {
       console.error("Failed to load data:", error);
+      showCriticalError("Unable to load your playbooks", "The stored playbook data could not be loaded. Please reload the page.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [showCriticalError]);
 
-  const handleCreatePlaybook = async (name: string) => {
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  const handleCreatePlaybook = async (name: string): Promise<boolean> => {
     try {
       const newPlaybook = await playbookService.createPlaybook(name);
       setPlaybooks([...playbooks, newPlaybook]);
       setSelectedPlaybook(newPlaybook);
+      showToast({ status: FeedbackStatus.INFO, title: "Playbook created", message: newPlaybook.name });
+      return true;
     } catch (error) {
       console.error("Failed to create playbook:", error);
-      alert("Error creating playbook");
+      showCriticalError("Playbook was not created", "The playbook could not be saved. Please try again.");
+      return false;
     }
   };
 
@@ -179,7 +186,21 @@ export default function Home() {
     setSelectedPlay(null);
   };
 
-  const handleDeletePlaybook = async (id: string) => {
+  const handleRenamePlaybook = async (id: string, name: string): Promise<boolean> => {
+    try {
+      const updatedPlaybook = await playbookService.updatePlaybookName(id, name);
+      setPlaybooks((current) => current.map((playbook) => (playbook.id === id ? updatedPlaybook : playbook)));
+      setSelectedPlaybook((current) => (current?.id === id ? updatedPlaybook : current));
+      showToast({ status: FeedbackStatus.INFO, title: "Playbook renamed", message: updatedPlaybook.name });
+      return true;
+    } catch (error) {
+      console.error("Failed to rename playbook:", error);
+      showCriticalError("Playbook was not renamed", "The new name could not be saved. Please try again.");
+      return false;
+    }
+  };
+
+  const handleDeletePlaybook = async (id: string): Promise<boolean> => {
     try {
       await playbookService.deletePlaybook(id);
       setPlaybooks(playbooks.filter((pb: Playbook) => pb.id !== id));
@@ -187,9 +208,12 @@ export default function Home() {
         setSelectedPlaybook(null);
         setSelectedPlay(null);
       }
+      showToast({ status: FeedbackStatus.INFO, title: "Playbook deleted" });
+      return true;
     } catch (error) {
       console.error("Failed to delete playbook:", error);
-      alert("Error deleting playbook");
+      showCriticalError("Playbook was not deleted", "The playbook could not be deleted. Please try again.");
+      return false;
     }
   };
 
@@ -200,14 +224,18 @@ export default function Home() {
     const printWindow = window.open(url, "_blank");
     if (!printWindow) {
       URL.revokeObjectURL(url);
-      alert("Please allow pop-ups to print the playbook.");
+      showToast({
+        status: FeedbackStatus.WARNING,
+        title: "Pop-up blocked",
+        message: "Allow pop-ups in your browser to print the playbook.",
+      });
       return;
     }
     setTimeout(() => URL.revokeObjectURL(url), 30000);
   };
 
-  const handleCreatePlay = async (name: string, side: PlaySide) => {
-    if (!selectedPlaybook) return;
+  const handleCreatePlay = async (name: string, side: PlaySide): Promise<boolean> => {
+    if (!selectedPlaybook) return false;
 
     try {
       const autoPattern = parseAutoPlayName(name);
@@ -246,9 +274,12 @@ export default function Home() {
         setPlaybooks(playbooks.map((pb: Playbook) => (pb.id === updated.id ? updated : pb)));
         setSelectedPlay(playToSelect);
       }
+      showToast({ status: FeedbackStatus.INFO, title: "Play created", message: playToSelect.name });
+      return true;
     } catch (error) {
       console.error("Failed to create play:", error);
-      alert("Error creating play");
+      showCriticalError("Play was not created", "The play could not be saved. Please try again.");
+      return false;
     }
   };
 
@@ -256,7 +287,31 @@ export default function Home() {
     setSelectedPlay(play);
   };
 
-  const handleDeletePlay = async (id: string) => {
+  const handleRenamePlay = async (id: string, name: string): Promise<boolean> => {
+    try {
+      const updatedPlay = await playService.updatePlayName(id, name);
+      setSelectedPlay((current) => (current?.id === id ? updatedPlay : current));
+      setSelectedPlaybook((current) =>
+        current
+          ? { ...current, plays: current.plays.map((play) => (play.id === id ? updatedPlay : play)) }
+          : current,
+      );
+      setPlaybooks((current) =>
+        current.map((playbook) => ({
+          ...playbook,
+          plays: playbook.plays.map((play) => (play.id === id ? updatedPlay : play)),
+        })),
+      );
+      showToast({ status: FeedbackStatus.INFO, title: "Play renamed", message: updatedPlay.name });
+      return true;
+    } catch (error) {
+      console.error("Failed to rename play:", error);
+      showCriticalError("Play was not renamed", "The new name could not be saved. Please try again.");
+      return false;
+    }
+  };
+
+  const handleDeletePlay = async (id: string): Promise<boolean> => {
     try {
       await playService.deletePlay(id);
 
@@ -272,9 +327,12 @@ export default function Home() {
       if (selectedPlay?.id === id) {
         setSelectedPlay(null);
       }
+      showToast({ status: FeedbackStatus.INFO, title: "Play deleted" });
+      return true;
     } catch (error) {
       console.error("Failed to delete play:", error);
-      alert("Error deleting play");
+      showCriticalError("Play was not deleted", "The play could not be deleted. Please try again.");
+      return false;
     }
   };
 
@@ -291,15 +349,18 @@ export default function Home() {
     }
   };
 
-  const handleCreatePlayerTemplate = async (name: string) => {
+  const handleCreatePlayerTemplate = async (name: string): Promise<boolean> => {
     try {
       const newTemplate = await playerTemplateService.createPlayerTemplate({ name });
       setPlayerTemplates([...playerTemplates, newTemplate]);
       setSelectedPlayerTemplate(newTemplate);
       setSelectedPlay(null);
+      showToast({ status: FeedbackStatus.INFO, title: "Player template created", message: newTemplate.name });
+      return true;
     } catch (error) {
       console.error("Failed to create player template:", error);
-      alert("Error creating player template");
+      showCriticalError("Template was not created", "The player template could not be saved. Please try again.");
+      return false;
     }
   };
 
@@ -308,16 +369,19 @@ export default function Home() {
     setSelectedPlay(null);
   };
 
-  const handleDeletePlayerTemplate = async (id: string) => {
+  const handleDeletePlayerTemplate = async (id: string): Promise<boolean> => {
     try {
       await playerTemplateService.deletePlayerTemplate(id);
       setPlayerTemplates(playerTemplates.filter((t) => t.id !== id));
       if (selectedPlayerTemplate?.id === id) {
         setSelectedPlayerTemplate(null);
       }
+      showToast({ status: FeedbackStatus.INFO, title: "Player template deleted" });
+      return true;
     } catch (error) {
       console.error("Failed to delete player template:", error);
-      alert("Error deleting player template");
+      showCriticalError("Template was not deleted", "The player template could not be deleted. Please try again.");
+      return false;
     }
   };
 
@@ -349,10 +413,12 @@ export default function Home() {
           playerTemplates={playerTemplates}
           selectedPlayerTemplate={selectedPlayerTemplate}
           onCreatePlaybook={handleCreatePlaybook}
+          onRenamePlaybook={handleRenamePlaybook}
           onSelectPlaybook={handleSelectPlaybook}
           onDeletePlaybook={handleDeletePlaybook}
           onPrintPlaybook={handlePrintPlaybook}
           onCreatePlay={handleCreatePlay}
+          onRenamePlay={handleRenamePlay}
           onSelectPlay={handleSelectPlay}
           onDeletePlay={handleDeletePlay}
           onCreatePlayerTemplate={handleCreatePlayerTemplate}

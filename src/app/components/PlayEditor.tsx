@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import {
   Play,
   PlayerState,
@@ -16,6 +16,8 @@ import { formationService } from "@/services/formationService";
 import { playerTemplateService } from "@/services/playerTemplateService";
 import FieldCanvas from "./FieldCanvas";
 import Toolbar from "./Toolbar";
+import { useFeedback } from "./feedback/ToastProvider";
+import { FeedbackStatus } from "./feedback/types";
 
 export type ToolMode = "select" | "route" | "pen";
 
@@ -25,29 +27,31 @@ interface PlayEditorProps {
 }
 
 export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
+  const { showToast } = useFeedback();
   const [toolMode, setToolMode] = useState<ToolMode>("select");
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [routeStyle, setRouteStyle] = useState<RouteStyle>(play.routeStyle || RouteStyle.STRAIGHT);
   const [isDirty, setIsDirty] = useState(false);
   const [playerTemplates, setPlayerTemplates] = useState<PlayerTemplate[]>([]);
 
-  useEffect(() => {
-    loadPlayerTemplates();
-  }, []);
-
-  // Sync routeStyle when play changes
-  useEffect(() => {
-    setRouteStyle(play.routeStyle || RouteStyle.STRAIGHT);
-  }, [play.id, play.routeStyle]);
-
-  const loadPlayerTemplates = async () => {
+  const loadPlayerTemplates = useCallback(async () => {
     try {
       const templates = await playerTemplateService.getAllPlayerTemplates();
       setPlayerTemplates(templates);
     } catch (error) {
       console.error("Failed to load player templates:", error);
+      showToast({ status: FeedbackStatus.ERROR, title: "Unable to load player templates" });
     }
-  };
+  }, [showToast]);
+
+  useEffect(() => {
+    void loadPlayerTemplates();
+  }, [loadPlayerTemplates]);
+
+  // Sync routeStyle when play changes
+  useEffect(() => {
+    setRouteStyle(play.routeStyle || RouteStyle.STRAIGHT);
+  }, [play.id, play.routeStyle]);
 
   const handlePlayersChange = async (players: PlayerState[]) => {
     try {
@@ -56,6 +60,7 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
       setIsDirty(false);
     } catch (error) {
       console.error("Failed to update players:", error);
+      showToast({ status: FeedbackStatus.ERROR, title: "Player changes were not saved" });
     }
   };
 
@@ -66,6 +71,7 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
       setIsDirty(false);
     } catch (error) {
       console.error("Failed to update routes:", error);
+      showToast({ status: FeedbackStatus.ERROR, title: "Route changes were not saved" });
     }
   };
 
@@ -76,6 +82,7 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
       setIsDirty(false);
     } catch (error) {
       console.error("Failed to update annotations:", error);
+      showToast({ status: FeedbackStatus.ERROR, title: "Annotations were not saved" });
     }
   };
 
@@ -90,21 +97,22 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
       onUpdate(updated);
     } catch (error) {
       console.error("Failed to update route style:", error);
+      showToast({ status: FeedbackStatus.ERROR, title: "Route style was not saved" });
     }
   };
 
   const handleSaveFormation = async (name: string) => {
     if (!name.trim()) {
-      alert("Please enter a formation name");
+      showToast({ status: FeedbackStatus.WARNING, title: "Formation name is required" });
       return;
     }
 
     try {
       await formationService.saveFormation(name, play.side, play.players);
-      alert("Formation saved successfully!");
+      showToast({ status: FeedbackStatus.INFO, title: "Formation saved", message: name.trim() });
     } catch (error) {
       console.error("Failed to save formation:", error);
-      alert("Error saving formation");
+      showToast({ status: FeedbackStatus.ERROR, title: "Formation was not saved" });
     }
   };
 
@@ -114,7 +122,7 @@ export default function PlayEditor({ play, onUpdate }: PlayEditorProps) {
       onUpdate(updated);
     } catch (error) {
       console.error("Failed to load formation:", error);
-      alert("Error loading formation");
+      showToast({ status: FeedbackStatus.ERROR, title: "Formation could not be loaded" });
     }
   };
 
